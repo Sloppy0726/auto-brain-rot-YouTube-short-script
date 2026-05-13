@@ -42,6 +42,8 @@ class ShortScript:
     source_ideas: List[str]
     estimated_seconds: float
     captions: List[Caption]
+    content_mode: str = "nonfiction"
+    fiction_genre: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)

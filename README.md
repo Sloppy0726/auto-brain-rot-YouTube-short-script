@@ -11,7 +11,10 @@ It can:
 - Write 45-60 second narration scripts.
 - Estimate punchy caption timing and export `.srt`.
 - Match your recorded voiceover files to generated scripts.
+- Retiming captions to the actual recorded voiceover duration.
 - Pick gameplay clips from a local gameplay library folder.
+- Apply genre-aware visual templates with timed highlighted captions.
+- Overlay an optional per-channel logo.
 - Render a 1080x1920 split-screen Short with captions on top and your gameplay on the bottom using `ffmpeg`.
 - Use either the offline template backend or Claude through Anthropic's Messages API.
 
@@ -97,6 +100,7 @@ python -m brainrot pipeline \
   --backend claude \
   --voiceover-dir assets/voiceovers \
   --gameplay-dir assets/gameplay/clips \
+  --channel example-channel \
   --out-dir output/today
 ```
 
@@ -107,6 +111,16 @@ assets/gameplay/clips/
 ```
 
 The pipeline picks one clip per script. The choice is deterministic by script slug so reruns are stable. Use `--gameplay-seed 42` to rotate selections.
+
+Put channel logos here:
+
+```text
+assets/logos/example-channel/logo.png
+```
+
+Then use `--channel example-channel`. You can also force a specific logo with `--logo path/to/logo.png`.
+
+When a voiceover is provided, captions are automatically retimed to the actual audio duration with `ffprobe`. This keeps the caption pace aligned with a human read instead of the estimated script speed. Use `--no-sync-captions` only if you want to keep the original generated timing.
 
 Upload a rendered Short to YouTube:
 
@@ -125,6 +139,7 @@ python -m brainrot pipeline \
   --backend claude \
   --voiceover-dir assets/voiceovers \
   --gameplay-dir assets/gameplay/clips \
+  --channel example-channel \
   --publish \
   --privacy-status private \
   --out-dir output/today
@@ -172,6 +187,7 @@ python -m brainrot render \
   output/qr-ticket/how-fake-qr-code-parking-tickets-work.json \
   --gameplay assets/gameplay/example.mp4 \
   --voiceover assets/voiceovers/how-fake-qr-code-parking-tickets-work.wav \
+  --channel example-channel \
   --out output/qr-ticket/final.mp4
 ```
 
@@ -184,9 +200,10 @@ python -m brainrot render \
 5. You fact-check nonfiction claims or review fiction for originality.
 6. Record the voiceover from the Markdown script.
 7. Save the recording with the same slug as the script JSON.
-8. Drop reusable gameplay clips into `assets/gameplay/clips/`.
-9. Video Agent matches the recorded audio, captions, and a gameplay clip into a split-screen render.
-10. Review the final video before uploading.
+8. Video Agent retimes captions to the recorded audio duration.
+9. Drop reusable gameplay clips into `assets/gameplay/clips/`.
+10. Video Agent matches the recorded audio, captions, and a gameplay clip into a split-screen render.
+11. Review the final video before uploading.
 
 Example:
 
@@ -239,12 +256,51 @@ Script Agent:
 Video Agent:
 
 - Uses your recorded audio when `--voiceover` or `--voiceover-dir` is passed.
+- Automatically syncs caption timing to the recorded audio duration.
 - Matches `--voiceover-dir` files by script slug, with `.wav`, `.mp3`, `.m4a`, `.aac`, `.aiff`, `.aif`, `.flac`, or `.ogg`.
 - Uses `--gameplay-dir` to pick from `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv` clips.
 - Uses `--gameplay` when you want to force one exact clip.
+- Uses `--channel` to load `assets/logos/<channel>/logo.png`.
+- Uses `--render-template auto` to style captions by fiction genre or nonfiction niche.
 - Can still use macOS `say` when `--make-voice` is passed as a scratch fallback.
 - Uses `ffmpeg` to render final split-screen videos when `--gameplay` or `--gameplay-dir` is passed.
 - Skips rendering and leaves warnings if required tools or assets are missing.
+
+Caption sync note:
+
+- Current sync mode is duration-proportional: caption chunks are spread across the actual voiceover length.
+- This handles slow or fast readers much better than script-estimated timing.
+- For exact word-level karaoke timing, the next upgrade would add a transcription/alignment backend such as Whisper.
+
+Rendered video look:
+
+```text
+1080x1920
++------------------------------+
+| blurred gameplay background  |
+| dark overlay                  |
+| logo in the top-left          |
+| timed highlighted captions    |
++------------------------------+
+| cropped gameplay clip         |
+| satisfying motion             |
++------------------------------+
+```
+
+Visual template keys:
+
+- `auto`
+- `scams`
+- `business`
+- `ai`
+- `internet`
+- `law`
+- `money`
+- `micro-horror`
+- `sci-fi-ai`
+- `moral-dilemma`
+- `workplace-drama`
+- `relationship-drama`
 
 Publisher Agent:
 
@@ -293,6 +349,7 @@ brainrot/
 assets/
   gameplay/
     clips/       Put reusable gameplay clips here.
+  logos/         Put per-channel logos here.
   voiceovers/    Put your recorded narration files here.
 output/          Generated scripts, captions, audio, and videos.
 ```

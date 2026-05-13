@@ -22,6 +22,8 @@ def make_script(brief: Brief) -> ShortScript:
         source_ideas=source_ideas_for_brief(brief),
         estimated_seconds=duration,
         captions=captions,
+        content_mode=brief.content_mode,
+        fiction_genre=brief.fiction_genre,
     )
 
 

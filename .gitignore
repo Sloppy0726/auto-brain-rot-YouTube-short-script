@@ -12,3 +12,8 @@ assets/gameplay/clips/*
 !assets/gameplay/clips/.gitkeep
 assets/voiceovers/*
 !assets/voiceovers/.gitkeep
+assets/logos/*
+!assets/logos/.gitkeep
+!assets/logos/*/
+assets/logos/*/*
+!assets/logos/*/.gitkeep

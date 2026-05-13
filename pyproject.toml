@@ -9,7 +9,9 @@ description = "Generate and render brain-rot style YouTube Shorts from original 
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [{ name = "sloppy0726" }]
-dependencies = []
+dependencies = [
+  "Pillow>=10.0.0",
+]
 
 [project.optional-dependencies]
 youtube = [

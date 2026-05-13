@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from .agents import DEFAULT_NICHES, run_pipeline, resolve_subreddits
+from .audio import AudioError, sync_script_file_to_voiceover
 from .claude import ClaudeError, DEFAULT_MODEL, make_claude_script
 from .files import load_script, slugify, write_script_bundle
 from .fiction import list_fiction_genres
@@ -58,6 +59,12 @@ def main() -> None:
     render_parser.add_argument("--audio", "--voiceover", dest="audio")
     render_parser.add_argument("--out")
     render_parser.add_argument("--font", default="Arial Black")
+    render_parser.add_argument("--render-template", default="auto")
+    render_parser.add_argument("--channel")
+    render_parser.add_argument("--logo")
+    render_parser.add_argument("--logo-dir", default="assets/logos")
+    render_parser.add_argument("--no-sync-captions", action="store_false", dest="sync_captions")
+    render_parser.set_defaults(sync_captions=True)
 
     pipeline_parser = subparsers.add_parser("pipeline", help="Run idea, script, and optional video agents.")
     pipeline_parser.add_argument("--count", type=int, default=3)
@@ -81,6 +88,12 @@ def main() -> None:
     pipeline_parser.add_argument("--gameplay")
     pipeline_parser.add_argument("--gameplay-dir")
     pipeline_parser.add_argument("--gameplay-seed", type=int)
+    pipeline_parser.add_argument("--render-template", default="auto")
+    pipeline_parser.add_argument("--channel")
+    pipeline_parser.add_argument("--logo")
+    pipeline_parser.add_argument("--logo-dir", default="assets/logos")
+    pipeline_parser.add_argument("--no-sync-captions", action="store_false", dest="sync_captions")
+    pipeline_parser.set_defaults(sync_captions=True)
     pipeline_parser.add_argument("--publish", action="store_true")
     pipeline_parser.add_argument("--privacy-status", choices=["private", "unlisted", "public"], default="private")
     pipeline_parser.add_argument("--category-id", default="22")
@@ -147,6 +160,11 @@ def main() -> None:
             audio=Path(args.audio) if args.audio else None,
             out=Path(args.out) if args.out else None,
             font=args.font,
+            render_template=args.render_template,
+            channel=args.channel,
+            logo=Path(args.logo) if args.logo else None,
+            logo_dir=Path(args.logo_dir),
+            sync_captions=args.sync_captions,
         )
     elif args.command == "pipeline":
         create_pipeline(
@@ -171,6 +189,11 @@ def main() -> None:
             gameplay=Path(args.gameplay) if args.gameplay else None,
             gameplay_dir=Path(args.gameplay_dir) if args.gameplay_dir else None,
             gameplay_seed=args.gameplay_seed,
+            render_template=args.render_template,
+            channel=args.channel,
+            logo=Path(args.logo) if args.logo else None,
+            logo_dir=Path(args.logo_dir),
+            sync_captions=args.sync_captions,
             publish=args.publish,
             privacy_status=args.privacy_status,
             category_id=args.category_id,
@@ -263,11 +286,33 @@ def create_render(
     audio: Optional[Path],
     out: Optional[Path],
     font: str,
+    render_template: str,
+    channel: Optional[str],
+    logo: Optional[Path],
+    logo_dir: Path,
+    sync_captions: bool,
 ) -> None:
-    script = load_script(script_json)
+    if audio and sync_captions:
+        try:
+            script, synced_duration = sync_script_file_to_voiceover(script_json, audio)
+            print(f"Synced captions to voiceover duration: {synced_duration:.2f}s")
+        except AudioError as exc:
+            raise SystemExit(str(exc))
+    else:
+        script = load_script(script_json)
     output_path = out or script_json.parent / f"{slugify(script['title'])}.mp4"
     try:
-        rendered = render_short(script, gameplay_path=gameplay, audio_path=audio, output_path=output_path, font_name=font)
+        rendered = render_short(
+            script,
+            gameplay_path=gameplay,
+            audio_path=audio,
+            output_path=output_path,
+            font_name=font,
+            render_template=render_template,
+            channel=channel,
+            logo_path=logo,
+            logo_dir=logo_dir,
+        )
     except RenderError as exc:
         raise SystemExit(str(exc))
     print(f"Rendered Short: {rendered}")
@@ -295,6 +340,11 @@ def create_pipeline(
     gameplay: Optional[Path],
     gameplay_dir: Optional[Path],
     gameplay_seed: Optional[int],
+    render_template: str,
+    channel: Optional[str],
+    logo: Optional[Path],
+    logo_dir: Path,
+    sync_captions: bool,
     publish: bool,
     privacy_status: str,
     category_id: str,
@@ -335,13 +385,18 @@ def create_pipeline(
             gameplay=gameplay,
             gameplay_dir=gameplay_dir,
             gameplay_seed=gameplay_seed,
+            render_template=render_template,
+            channel=channel,
+            logo=logo,
+            logo_dir=logo_dir,
+            sync_captions=sync_captions,
             publish=publish,
             privacy_status=privacy_status,
             category_id=category_id,
             client_secrets=client_secrets,
             token_path=token_path,
         )
-    except (ClaudeError, YouTubeError) as exc:
+    except (ClaudeError, YouTubeError, AudioError) as exc:
         raise SystemExit(str(exc))
 
     print(f"Pipeline created {len(items)} Short bundle(s) in {out_dir}")

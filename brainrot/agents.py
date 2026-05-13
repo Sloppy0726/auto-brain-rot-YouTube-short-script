@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from .audio import AudioError, sync_script_file_to_voiceover
 from .claude import DEFAULT_MODEL, make_claude_script
 from .files import load_script, write_script_bundle
 from .fiction import make_fiction_briefs
@@ -123,6 +124,7 @@ class PipelineItem:
     audio: Optional[Path] = None
     gameplay: Optional[Path] = None
     video: Optional[Path] = None
+    caption_sync: Optional[Dict[str, object]] = None
     youtube_video_id: Optional[str] = None
     youtube_url: Optional[str] = None
     warnings: List[str] = field(default_factory=list)
@@ -136,6 +138,7 @@ class PipelineItem:
             "audio": str(self.audio) if self.audio else None,
             "gameplay": str(self.gameplay) if self.gameplay else None,
             "video": str(self.video) if self.video else None,
+            "caption_sync": self.caption_sync,
             "youtube_video_id": self.youtube_video_id,
             "youtube_url": self.youtube_url,
             "warnings": self.warnings,
@@ -285,6 +288,11 @@ class VideoAgent:
         gameplay: Optional[Path] = None,
         gameplay_dir: Optional[Path] = None,
         gameplay_seed: Optional[int] = None,
+        render_template: str = "auto",
+        channel: Optional[str] = None,
+        logo: Optional[Path] = None,
+        logo_dir: Path = Path("assets/logos"),
+        sync_captions: bool = True,
     ) -> None:
         self.make_voice = make_voice
         self.voice = voice
@@ -293,10 +301,21 @@ class VideoAgent:
         self.gameplay = gameplay
         self.gameplay_dir = gameplay_dir
         self.gameplay_seed = gameplay_seed
+        self.render_template = render_template
+        self.channel = channel
+        self.logo = logo
+        self.logo_dir = logo_dir
+        self.sync_captions = sync_captions
 
     def produce(self, script_json: Path, out_dir: Path) -> Dict[str, object]:
         script = load_script(script_json)
-        result: Dict[str, object] = {"audio": None, "gameplay": None, "video": None, "warnings": []}
+        result: Dict[str, object] = {
+            "audio": None,
+            "gameplay": None,
+            "video": None,
+            "caption_sync": None,
+            "warnings": [],
+        }
         audio_path, voiceover_warning = self.resolve_recorded_voiceover(script_json)
         if voiceover_warning:
             result["warnings"].append(voiceover_warning)
@@ -316,6 +335,16 @@ class VideoAgent:
             except VoiceError as exc:
                 result["warnings"].append(str(exc))
 
+        if audio_path and self.sync_captions:
+            try:
+                script, synced_duration = sync_script_file_to_voiceover(script_json, audio_path)
+                result["caption_sync"] = {
+                    "method": "duration-proportional",
+                    "audio_duration_seconds": synced_duration,
+                }
+            except AudioError as exc:
+                result["warnings"].append(str(exc))
+
         if self.expects_gameplay() and self.expects_recorded_voiceover() and not audio_path:
             result["warnings"].append("Skipped render because no recorded voiceover audio was found.")
             return result
@@ -331,6 +360,10 @@ class VideoAgent:
                     gameplay_path=gameplay_path,
                     audio_path=audio_path,
                     output_path=out_dir / f"{script_json.stem}.mp4",
+                    render_template=self.render_template,
+                    channel=self.channel,
+                    logo_path=self.logo,
+                    logo_dir=self.logo_dir,
                 )
                 result["video"] = video_path
             except RenderError as exc:
@@ -410,6 +443,11 @@ def run_pipeline(
     gameplay: Optional[Path] = None,
     gameplay_dir: Optional[Path] = None,
     gameplay_seed: Optional[int] = None,
+    render_template: str = "auto",
+    channel: Optional[str] = None,
+    logo: Optional[Path] = None,
+    logo_dir: Path = Path("assets/logos"),
+    sync_captions: bool = True,
     publish: bool = False,
     privacy_status: str = "private",
     category_id: str = "22",
@@ -435,6 +473,11 @@ def run_pipeline(
         gameplay=gameplay,
         gameplay_dir=gameplay_dir,
         gameplay_seed=gameplay_seed,
+        render_template=render_template,
+        channel=channel,
+        logo=logo,
+        logo_dir=logo_dir,
+        sync_captions=sync_captions,
     )
     publisher_agent = (
         PublisherAgent(
@@ -464,6 +507,7 @@ def run_pipeline(
                 audio=produced["audio"],
                 gameplay=produced["gameplay"],
                 video=produced["video"],
+                caption_sync=produced["caption_sync"],
                 youtube_video_id=upload["youtube_video_id"],
                 youtube_url=upload["youtube_url"],
                 warnings=[

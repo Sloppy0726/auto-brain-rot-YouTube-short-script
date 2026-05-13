@@ -29,12 +29,9 @@ def make_claude_script(brief: Brief, model: str = DEFAULT_MODEL) -> ShortScript:
     duration = estimate_duration_seconds(narration)
     captions = make_captions(narration, duration)
 
-    hashtags = data.get("hashtags") or NICHE_HASHTAGS.get(brief.niche, ["#shorts"])
-    fact_check_notes = data.get("fact_check_notes") or [
-        "Verify every factual claim before publishing.",
-        "Add source URLs before upload.",
-    ]
-    source_ideas = data.get("source_ideas") or brief.source_ideas
+    hashtags = data.get("hashtags") or default_hashtags(brief)
+    fact_check_notes = data.get("fact_check_notes") or default_fact_check_notes(brief)
+    source_ideas = data.get("source_ideas") or ([] if brief.content_mode == "fiction" else brief.source_ideas)
 
     return ShortScript(
         title=require_string(data, "title", fallback=brief.title),
@@ -46,7 +43,34 @@ def make_claude_script(brief: Brief, model: str = DEFAULT_MODEL) -> ShortScript:
         source_ideas=[str(item) for item in source_ideas],
         estimated_seconds=duration,
         captions=captions,
+        content_mode=brief.content_mode,
+        fiction_genre=brief.fiction_genre,
     )
+
+
+def default_hashtags(brief: Brief):
+    if brief.content_mode == "fiction":
+        return {
+            "micro-horror": ["#horrorstory", "#scarystory", "#shorts"],
+            "sci-fi-ai": ["#scifi", "#aitok", "#shorts"],
+            "moral-dilemma": ["#storytime", "#mystory", "#shorts"],
+            "workplace-drama": ["#workstory", "#corporatestories", "#shorts"],
+            "relationship-drama": ["#storytime", "#drama", "#shorts"],
+        }.get(brief.fiction_genre, ["#storytime", "#shorts"])
+    return NICHE_HASHTAGS.get(brief.niche, ["#shorts"])
+
+
+def default_fact_check_notes(brief: Brief):
+    if brief.content_mode == "fiction":
+        return [
+            "Fiction. Do not present this as a true event.",
+            "Check for accidental similarity to existing stories before publishing.",
+            "Keep titles/descriptions clear that the channel publishes original fiction.",
+        ]
+    return [
+        "Verify every factual claim before publishing.",
+        "Add source URLs before upload.",
+    ]
 
 
 def call_claude(user_prompt: str, model: str) -> str:
