@@ -292,7 +292,9 @@ class VideoAgent:
         channel: Optional[str] = None,
         logo: Optional[Path] = None,
         logo_dir: Path = Path("assets/logos"),
-        sync_captions: bool = True,
+        caption_sync: str = "duration",
+        transcription_model: str = "whisper-1",
+        sync_captions: Optional[bool] = None,
     ) -> None:
         self.make_voice = make_voice
         self.voice = voice
@@ -305,7 +307,8 @@ class VideoAgent:
         self.channel = channel
         self.logo = logo
         self.logo_dir = logo_dir
-        self.sync_captions = sync_captions
+        self.caption_sync = "none" if sync_captions is False else caption_sync
+        self.transcription_model = transcription_model
 
     def produce(self, script_json: Path, out_dir: Path) -> Dict[str, object]:
         script = load_script(script_json)
@@ -335,14 +338,24 @@ class VideoAgent:
             except VoiceError as exc:
                 result["warnings"].append(str(exc))
 
-        if audio_path and self.sync_captions:
+        if audio_path and self.caption_sync != "none":
             try:
-                script, synced_duration = sync_script_file_to_voiceover(script_json, audio_path)
-                result["caption_sync"] = {
-                    "method": "duration-proportional",
-                    "audio_duration_seconds": synced_duration,
-                }
+                script, synced_duration = sync_script_file_to_voiceover(
+                    script_json,
+                    audio_path,
+                    mode=self.caption_sync,
+                    transcription_model=self.transcription_model,
+                )
+                result["caption_sync"] = script.get(
+                    "caption_sync",
+                    {
+                        "method": self.caption_sync,
+                        "audio_duration_seconds": synced_duration,
+                    },
+                )
             except AudioError as exc:
+                if self.caption_sync == "word":
+                    raise
                 result["warnings"].append(str(exc))
 
         if self.expects_gameplay() and self.expects_recorded_voiceover() and not audio_path:
@@ -447,7 +460,9 @@ def run_pipeline(
     channel: Optional[str] = None,
     logo: Optional[Path] = None,
     logo_dir: Path = Path("assets/logos"),
-    sync_captions: bool = True,
+    caption_sync: str = "duration",
+    transcription_model: str = "whisper-1",
+    sync_captions: Optional[bool] = None,
     publish: bool = False,
     privacy_status: str = "private",
     category_id: str = "22",
@@ -477,6 +492,8 @@ def run_pipeline(
         channel=channel,
         logo=logo,
         logo_dir=logo_dir,
+        caption_sync=caption_sync,
+        transcription_model=transcription_model,
         sync_captions=sync_captions,
     )
     publisher_agent = (

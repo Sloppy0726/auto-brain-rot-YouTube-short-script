@@ -63,8 +63,9 @@ def main() -> None:
     render_parser.add_argument("--channel")
     render_parser.add_argument("--logo")
     render_parser.add_argument("--logo-dir", default="assets/logos")
-    render_parser.add_argument("--no-sync-captions", action="store_false", dest="sync_captions")
-    render_parser.set_defaults(sync_captions=True)
+    render_parser.add_argument("--caption-sync", choices=["duration", "word", "none"], default="duration")
+    render_parser.add_argument("--transcription-model", default="whisper-1")
+    render_parser.add_argument("--no-sync-captions", action="store_const", const="none", dest="caption_sync")
 
     pipeline_parser = subparsers.add_parser("pipeline", help="Run idea, script, and optional video agents.")
     pipeline_parser.add_argument("--count", type=int, default=3)
@@ -92,8 +93,9 @@ def main() -> None:
     pipeline_parser.add_argument("--channel")
     pipeline_parser.add_argument("--logo")
     pipeline_parser.add_argument("--logo-dir", default="assets/logos")
-    pipeline_parser.add_argument("--no-sync-captions", action="store_false", dest="sync_captions")
-    pipeline_parser.set_defaults(sync_captions=True)
+    pipeline_parser.add_argument("--caption-sync", choices=["duration", "word", "none"], default="duration")
+    pipeline_parser.add_argument("--transcription-model", default="whisper-1")
+    pipeline_parser.add_argument("--no-sync-captions", action="store_const", const="none", dest="caption_sync")
     pipeline_parser.add_argument("--publish", action="store_true")
     pipeline_parser.add_argument("--privacy-status", choices=["private", "unlisted", "public"], default="private")
     pipeline_parser.add_argument("--category-id", default="22")
@@ -164,7 +166,8 @@ def main() -> None:
             channel=args.channel,
             logo=Path(args.logo) if args.logo else None,
             logo_dir=Path(args.logo_dir),
-            sync_captions=args.sync_captions,
+            caption_sync=args.caption_sync,
+            transcription_model=args.transcription_model,
         )
     elif args.command == "pipeline":
         create_pipeline(
@@ -193,7 +196,8 @@ def main() -> None:
             channel=args.channel,
             logo=Path(args.logo) if args.logo else None,
             logo_dir=Path(args.logo_dir),
-            sync_captions=args.sync_captions,
+            caption_sync=args.caption_sync,
+            transcription_model=args.transcription_model,
             publish=args.publish,
             privacy_status=args.privacy_status,
             category_id=args.category_id,
@@ -290,12 +294,21 @@ def create_render(
     channel: Optional[str],
     logo: Optional[Path],
     logo_dir: Path,
-    sync_captions: bool,
+    caption_sync: str,
+    transcription_model: str,
 ) -> None:
-    if audio and sync_captions:
+    if audio and caption_sync != "none":
         try:
-            script, synced_duration = sync_script_file_to_voiceover(script_json, audio)
-            print(f"Synced captions to voiceover duration: {synced_duration:.2f}s")
+            script, synced_duration = sync_script_file_to_voiceover(
+                script_json,
+                audio,
+                mode=caption_sync,
+                transcription_model=transcription_model,
+            )
+            if caption_sync == "word":
+                print(f"Synced captions to voiceover words: {synced_duration:.2f}s")
+            else:
+                print(f"Synced captions to voiceover duration: {synced_duration:.2f}s")
         except AudioError as exc:
             raise SystemExit(str(exc))
     else:
@@ -344,7 +357,8 @@ def create_pipeline(
     channel: Optional[str],
     logo: Optional[Path],
     logo_dir: Path,
-    sync_captions: bool,
+    caption_sync: str,
+    transcription_model: str,
     publish: bool,
     privacy_status: str,
     category_id: str,
@@ -389,7 +403,8 @@ def create_pipeline(
             channel=channel,
             logo=logo,
             logo_dir=logo_dir,
-            sync_captions=sync_captions,
+            caption_sync=caption_sync,
+            transcription_model=transcription_model,
             publish=publish,
             privacy_status=privacy_status,
             category_id=category_id,

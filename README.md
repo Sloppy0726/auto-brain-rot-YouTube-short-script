@@ -120,7 +120,19 @@ assets/logos/example-channel/logo.png
 
 Then use `--channel example-channel`. You can also force a specific logo with `--logo path/to/logo.png`.
 
-When a voiceover is provided, captions are automatically retimed to the actual audio duration with `ffprobe`. This keeps the caption pace aligned with a human read instead of the estimated script speed. Use `--no-sync-captions` only if you want to keep the original generated timing.
+When a voiceover is provided, captions are automatically retimed to the actual audio duration with `ffprobe`. This keeps the caption pace aligned with a human read instead of the estimated script speed. Use `--caption-sync word` for Whisper word timestamps, or `--no-sync-captions`/`--caption-sync none` if you want to keep the original generated timing.
+
+For tighter sync to the actual spoken words, set `OPENAI_API_KEY` and use word mode:
+
+```bash
+export OPENAI_API_KEY="your_api_key"
+python -m brainrot render \
+  output/qr-ticket/how-fake-qr-code-parking-tickets-work.json \
+  --gameplay assets/gameplay/example.mp4 \
+  --voiceover assets/voiceovers/how-fake-qr-code-parking-tickets-work.wav \
+  --caption-sync word \
+  --out output/qr-ticket/final.mp4
+```
 
 Upload a rendered Short to YouTube:
 
@@ -256,7 +268,8 @@ Script Agent:
 Video Agent:
 
 - Uses your recorded audio when `--voiceover` or `--voiceover-dir` is passed.
-- Automatically syncs caption timing to the recorded audio duration.
+- Automatically syncs caption timing to the recorded audio duration by default.
+- Uses `--caption-sync word` to transcribe the voiceover with Whisper and time captions from returned word timestamps.
 - Matches `--voiceover-dir` files by script slug, with `.wav`, `.mp3`, `.m4a`, `.aac`, `.aiff`, `.aif`, `.flac`, or `.ogg`.
 - Uses `--gameplay-dir` to pick from `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv` clips.
 - Uses `--gameplay` when you want to force one exact clip.
@@ -268,9 +281,9 @@ Video Agent:
 
 Caption sync note:
 
-- Current sync mode is duration-proportional: caption chunks are spread across the actual voiceover length.
-- This handles slow or fast readers much better than script-estimated timing.
-- For exact word-level karaoke timing, the next upgrade would add a transcription/alignment backend such as Whisper.
+- `--caption-sync duration` is the default cheap/local mode: caption chunks are spread across the actual voiceover length.
+- `--caption-sync word` sends the voiceover to OpenAI Whisper with word timestamp output and rebuilds caption chunks from those timings.
+- `--caption-sync none` leaves the original generated captions unchanged. `--no-sync-captions` is kept as a compatibility alias.
 
 Rendered video look:
 
