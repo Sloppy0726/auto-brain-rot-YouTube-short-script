@@ -1,0 +1,9 @@
+.DS_Store
+.venv/
+__pycache__/
+*.pyc
+output/
+client_secrets.json
+.secrets/
+assets/gameplay/*
+!assets/gameplay/.gitkeep

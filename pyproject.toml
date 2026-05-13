@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auto-brain-rot-youtube-short-script"
+version = "0.1.0"
+description = "Generate and render brain-rot style YouTube Shorts from original scripts."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "sloppy0726" }]
+dependencies = []
+
+[project.optional-dependencies]
+youtube = [
+  "google-api-python-client>=2.0.0",
+  "google-auth-oauthlib>=1.0.0",
+  "google-auth-httplib2>=0.2.0",
+]
+
+[project.scripts]
+brainrot = "brainrot.cli:main"
+
+[tool.setuptools]
+packages = ["brainrot"]

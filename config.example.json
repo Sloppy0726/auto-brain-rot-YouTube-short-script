@@ -1,0 +1,18 @@
+{
+  "count": 3,
+  "backend": "claude",
+  "model": "claude-sonnet-4-5",
+  "niches": ["scams", "business", "ai", "internet", "law", "money"],
+  "extra_subreddits": ["SideProject", "ProductivityApps"],
+  "max_subreddits": 60,
+  "per_subreddit": 8,
+  "reddit_sort": "hot",
+  "reddit_time": "day",
+  "make_voice": true,
+  "voice": "Samantha",
+  "gameplay": "assets/gameplay/example.mp4",
+  "publish": false,
+  "privacy_status": "private",
+  "client_secrets": "client_secrets.json",
+  "token_path": ".secrets/youtube-token.json"
+}
