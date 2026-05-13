@@ -59,6 +59,8 @@ def main() -> None:
     render_parser.add_argument("--gameplay-seed", type=int)
     render_parser.add_argument("--gameplay-start", type=float)
     render_parser.add_argument("--audio", "--voiceover", dest="audio")
+    render_parser.add_argument("--music")
+    render_parser.add_argument("--music-volume", type=float, default=0.1)
     render_parser.add_argument("--out")
     render_parser.add_argument("--font", default="Arial Black")
     render_parser.add_argument("--render-template", default="auto")
@@ -88,6 +90,9 @@ def main() -> None:
     pipeline_parser.add_argument("--voice")
     pipeline_parser.add_argument("--voiceover")
     pipeline_parser.add_argument("--voiceover-dir")
+    pipeline_parser.add_argument("--music")
+    pipeline_parser.add_argument("--music-dir")
+    pipeline_parser.add_argument("--music-volume", type=float, default=0.1)
     pipeline_parser.add_argument("--gameplay")
     pipeline_parser.add_argument("--gameplay-dir")
     pipeline_parser.add_argument("--gameplay-seed", type=int)
@@ -164,6 +169,8 @@ def main() -> None:
             gameplay_seed=args.gameplay_seed,
             gameplay_start=args.gameplay_start,
             audio=Path(args.audio) if args.audio else None,
+            music=Path(args.music) if args.music else None,
+            music_volume=args.music_volume,
             out=Path(args.out) if args.out else None,
             font=args.font,
             render_template=args.render_template,
@@ -193,6 +200,9 @@ def main() -> None:
             voice=args.voice,
             voiceover=Path(args.voiceover) if args.voiceover else None,
             voiceover_dir=Path(args.voiceover_dir) if args.voiceover_dir else None,
+            music=Path(args.music) if args.music else None,
+            music_dir=Path(args.music_dir) if args.music_dir else None,
+            music_volume=args.music_volume,
             gameplay=Path(args.gameplay) if args.gameplay else None,
             gameplay_dir=Path(args.gameplay_dir) if args.gameplay_dir else None,
             gameplay_seed=args.gameplay_seed,
@@ -294,6 +304,8 @@ def create_render(
     gameplay_seed: Optional[int],
     gameplay_start: Optional[float],
     audio: Optional[Path],
+    music: Optional[Path],
+    music_volume: float,
     out: Optional[Path],
     font: str,
     render_template: str,
@@ -325,6 +337,8 @@ def create_render(
             script,
             gameplay_path=gameplay,
             audio_path=audio,
+            music_path=music,
+            music_volume=music_volume,
             output_path=output_path,
             font_name=font,
             render_template=render_template,
@@ -367,6 +381,9 @@ def create_pipeline(
     voice: Optional[str],
     voiceover: Optional[Path],
     voiceover_dir: Optional[Path],
+    music: Optional[Path],
+    music_dir: Optional[Path],
+    music_volume: float,
     gameplay: Optional[Path],
     gameplay_dir: Optional[Path],
     gameplay_seed: Optional[int],
@@ -413,6 +430,9 @@ def create_pipeline(
             voice=voice,
             voiceover=voiceover,
             voiceover_dir=voiceover_dir,
+            music=music,
+            music_dir=music_dir,
+            music_volume=music_volume,
             gameplay=gameplay,
             gameplay_dir=gameplay_dir,
             gameplay_seed=gameplay_seed,

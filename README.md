@@ -107,6 +107,8 @@ python -m brainrot pipeline \
   --model gpt-5-mini \
   --voiceover-dir assets/voiceovers \
   --gameplay-dir assets/gameplay/clips \
+  --music-dir assets/music \
+  --music-volume 0.10 \
   --channel example-channel \
   --out-dir output/today
 ```
@@ -118,6 +120,25 @@ assets/gameplay/clips/
 ```
 
 The pipeline picks one clip per script, then starts at a random-looking point inside that clip for the background segment. The choice is deterministic by script slug so reruns are stable. Use `--gameplay-seed 42` to rotate clip selections and start points.
+
+Put quiet background music tracks here:
+
+```text
+assets/music/
+```
+
+Use `--music-dir assets/music --music-volume 0.10` to mix a low-volume music bed under your voiceover. Start low; `0.08` to `0.12` is usually enough.
+
+You can also organize music by genre or niche:
+
+```text
+assets/music/micro-horror/
+assets/music/sci-fi-ai/
+assets/music/business/
+assets/music/scams/
+```
+
+Then point a run at one folder, such as `--music-dir assets/music/micro-horror`.
 
 Put channel logos here:
 
@@ -137,6 +158,8 @@ python -m brainrot render \
   output/qr-ticket/how-fake-qr-code-parking-tickets-work.json \
   --gameplay assets/gameplay/example.mp4 \
   --voiceover assets/voiceovers/how-fake-qr-code-parking-tickets-work.wav \
+  --music assets/music/background.mp3 \
+  --music-volume 0.10 \
   --caption-sync word \
   --out output/qr-ticket/final.mp4
 ```
@@ -159,6 +182,8 @@ python -m brainrot pipeline \
   --model gpt-5-mini \
   --voiceover-dir assets/voiceovers \
   --gameplay-dir assets/gameplay/clips \
+  --music-dir assets/music \
+  --music-volume 0.10 \
   --channel example-channel \
   --publish \
   --privacy-status private \
@@ -209,6 +234,8 @@ python -m brainrot render \
   --gameplay assets/gameplay/example.mp4 \
   --gameplay-seed 42 \
   --voiceover assets/voiceovers/how-fake-qr-code-parking-tickets-work.wav \
+  --music assets/music/background.mp3 \
+  --music-volume 0.10 \
   --channel example-channel \
   --out output/qr-ticket/final.mp4
 ```
@@ -241,6 +268,7 @@ NICHES="scams,business,ai,internet,money"
 OUT_DIR="output/today"
 GAMEPLAY_SEED=42
 CAPTION_SYNC="word"
+MUSIC_VOLUME=0.10
 PRIVACY_STATUS="private"
 ```
 
@@ -259,6 +287,7 @@ Common parameters to change:
 | `OUT_DIR` | Where generated scripts, captions, transcripts, manifests, and videos are saved. | `output/today`, `output/horror-batch-1` |
 | `GAMEPLAY_SEED` | Changes which gameplay clip and start point are selected. Same seed means stable reruns. | `42`, `100`, `999` |
 | `CAPTION_SYNC` | Caption timing mode. | `word`, `duration`, `none` |
+| `MUSIC_VOLUME` | Background music volume under the voiceover. | `0.08`, `0.10`, `0.12` |
 | `PRIVACY_STATUS` | YouTube privacy setting when publishing. | `private`, `unlisted`, `public` |
 
 ### 3. Generate scripts first
@@ -293,6 +322,14 @@ Put long gameplay source clips here:
 assets/gameplay/clips/
 ```
 
+Put background music tracks here:
+
+```text
+assets/music/
+```
+
+For tighter control, use a genre/niche folder such as `assets/music/micro-horror/` or `assets/music/business/`.
+
 Put the channel logo here:
 
 ```text
@@ -314,6 +351,8 @@ python -m brainrot pipeline \
   --fiction-genre "$FICTION_GENRE" \
   --voiceover-dir assets/voiceovers \
   --gameplay-dir assets/gameplay/clips \
+  --music-dir assets/music \
+  --music-volume "$MUSIC_VOLUME" \
   --caption-sync "$CAPTION_SYNC" \
   --gameplay-seed "$GAMEPLAY_SEED" \
   --channel "$CHANNEL" \
@@ -348,6 +387,8 @@ python -m brainrot pipeline \
   --fiction-genre "$FICTION_GENRE" \
   --voiceover-dir assets/voiceovers \
   --gameplay-dir assets/gameplay/clips \
+  --music-dir assets/music \
+  --music-volume "$MUSIC_VOLUME" \
   --caption-sync "$CAPTION_SYNC" \
   --gameplay-seed "$GAMEPLAY_SEED" \
   --channel "$CHANNEL" \
@@ -369,8 +410,9 @@ Change `PRIVACY_STATUS` to `unlisted` or `public` only when you are ready.
 7. Save the recording with the same slug as the script JSON.
 8. Video Agent retimes captions to the recorded audio duration.
 9. Drop reusable gameplay clips into `assets/gameplay/clips/`.
-10. Video Agent matches the recorded audio, captions, and a gameplay clip into a split-screen render.
-11. Review the final video before uploading.
+10. Drop quiet background music tracks into `assets/music/`.
+11. Video Agent matches the recorded audio, music, captions, and a gameplay clip into a split-screen render.
+12. Review the final video before uploading.
 
 Example:
 
@@ -423,6 +465,8 @@ Script Agent:
 Video Agent:
 
 - Uses your recorded audio when `--voiceover` or `--voiceover-dir` is passed.
+- Uses `--music` or `--music-dir` to add a quiet background music bed.
+- Uses `--music-volume` to control music loudness. Default is `0.10`.
 - Automatically syncs caption timing to the recorded audio duration by default.
 - Uses `--caption-sync word` to transcribe the voiceover with Whisper and time captions from returned word timestamps.
 - Matches `--voiceover-dir` files by script slug, with `.wav`, `.mp3`, `.m4a`, `.aac`, `.aiff`, `.aif`, `.flac`, or `.ogg`.
@@ -519,6 +563,7 @@ assets/
   gameplay/
     clips/       Put reusable gameplay clips here.
   logos/         Put per-channel logos here.
+  music/         Put background music tracks here.
   voiceovers/    Put your recorded narration files here.
 output/          Generated scripts, captions, audio, and videos.
 ```

@@ -121,6 +121,7 @@ class PipelineItem:
     script_markdown: Path
     captions_srt: Path
     audio: Optional[Path] = None
+    music: Optional[Path] = None
     gameplay: Optional[Path] = None
     video: Optional[Path] = None
     caption_sync: Optional[Dict[str, object]] = None
@@ -135,6 +136,7 @@ class PipelineItem:
             "script_markdown": str(self.script_markdown),
             "captions_srt": str(self.captions_srt),
             "audio": str(self.audio) if self.audio else None,
+            "music": str(self.music) if self.music else None,
             "gameplay": str(self.gameplay) if self.gameplay else None,
             "video": str(self.video) if self.video else None,
             "caption_sync": self.caption_sync,
@@ -284,6 +286,9 @@ class VideoAgent:
         voice: Optional[str] = None,
         voiceover: Optional[Path] = None,
         voiceover_dir: Optional[Path] = None,
+        music: Optional[Path] = None,
+        music_dir: Optional[Path] = None,
+        music_volume: float = 0.1,
         gameplay: Optional[Path] = None,
         gameplay_dir: Optional[Path] = None,
         gameplay_seed: Optional[int] = None,
@@ -299,6 +304,9 @@ class VideoAgent:
         self.voice = voice
         self.voiceover = voiceover
         self.voiceover_dir = voiceover_dir
+        self.music = music
+        self.music_dir = music_dir
+        self.music_volume = music_volume
         self.gameplay = gameplay
         self.gameplay_dir = gameplay_dir
         self.gameplay_seed = gameplay_seed
@@ -313,6 +321,7 @@ class VideoAgent:
         script = load_script(script_json)
         result: Dict[str, object] = {
             "audio": None,
+            "music": None,
             "gameplay": None,
             "video": None,
             "caption_sync": None,
@@ -323,6 +332,12 @@ class VideoAgent:
             result["warnings"].append(voiceover_warning)
         if audio_path:
             result["audio"] = audio_path
+
+        music_path, music_warning = self.resolve_music_track(script_json)
+        if music_warning:
+            result["warnings"].append(music_warning)
+        if music_path:
+            result["music"] = music_path
 
         gameplay_path, gameplay_warning = self.resolve_gameplay_clip(script_json)
         if gameplay_warning:
@@ -371,6 +386,8 @@ class VideoAgent:
                     script,
                     gameplay_path=gameplay_path,
                     audio_path=audio_path,
+                    music_path=music_path,
+                    music_volume=self.music_volume,
                     output_path=out_dir / f"{script_json.stem}.mp4",
                     render_template=self.render_template,
                     channel=self.channel,
@@ -409,6 +426,32 @@ class VideoAgent:
 
         extensions = ", ".join(AUDIO_EXTENSIONS)
         return None, f"No recorded voiceover found for {script_json.stem}. Expected one of: {extensions}"
+
+    def resolve_music_track(self, script_json: Path) -> tuple:
+        if self.music:
+            if self.music.exists():
+                return self.music, None
+            return None, f"Music file does not exist: {self.music}"
+
+        if not self.music_dir:
+            return None, None
+
+        if not self.music_dir.exists():
+            return None, f"Music directory does not exist: {self.music_dir}"
+
+        tracks = [
+            path
+            for path in self.music_dir.rglob("*")
+            if path.is_file() and path.suffix.lower() in AUDIO_EXTENSIONS
+        ]
+        tracks.sort()
+        if not tracks:
+            extensions = ", ".join(AUDIO_EXTENSIONS)
+            return None, f"No music tracks found in {self.music_dir}. Expected one of: {extensions}"
+
+        seed = f"music:{self.gameplay_seed}:{script_json.stem}" if self.gameplay_seed is not None else f"music:{script_json.stem}"
+        rng = random.Random(seed)
+        return tracks[rng.randrange(len(tracks))], None
 
     def resolve_gameplay_clip(self, script_json: Path) -> tuple:
         if self.gameplay:
@@ -457,6 +500,9 @@ def run_pipeline(
     voice: Optional[str] = None,
     voiceover: Optional[Path] = None,
     voiceover_dir: Optional[Path] = None,
+    music: Optional[Path] = None,
+    music_dir: Optional[Path] = None,
+    music_volume: float = 0.1,
     gameplay: Optional[Path] = None,
     gameplay_dir: Optional[Path] = None,
     gameplay_seed: Optional[int] = None,
@@ -489,6 +535,9 @@ def run_pipeline(
         voice=voice,
         voiceover=voiceover,
         voiceover_dir=voiceover_dir,
+        music=music,
+        music_dir=music_dir,
+        music_volume=music_volume,
         gameplay=gameplay,
         gameplay_dir=gameplay_dir,
         gameplay_seed=gameplay_seed,
@@ -526,6 +575,7 @@ def run_pipeline(
                 script_markdown=paths["markdown"],
                 captions_srt=paths["srt"],
                 audio=produced["audio"],
+                music=produced["music"],
                 gameplay=produced["gameplay"],
                 video=produced["video"],
                 caption_sync=produced["caption_sync"],

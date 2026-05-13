@@ -176,6 +176,8 @@ def render_short(
     gameplay_path: Path,
     output_path: Path,
     audio_path: Optional[Path] = None,
+    music_path: Optional[Path] = None,
+    music_volume: float = 0.1,
     font_name: str = "Arial Black",
     render_template: str = "auto",
     logo_path: Optional[Path] = None,
@@ -192,6 +194,8 @@ def render_short(
         raise RenderError(f"Gameplay file does not exist: {gameplay_path}")
     if audio_path and not audio_path.exists():
         raise RenderError(f"Audio file does not exist: {audio_path}")
+    if music_path and not music_path.exists():
+        raise RenderError(f"Music file does not exist: {music_path}")
     resolved_logo = resolve_logo_path(channel=channel, logo_path=logo_path, logo_dir=logo_dir)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -216,21 +220,37 @@ def render_short(
     command.extend(["-i", str(gameplay_path)])
     if audio_path:
         command.extend(["-i", str(audio_path)])
+    music_input_index = None
+    if music_path:
+        music_input_index = 1 + (1 if audio_path else 0)
+        command.extend(["-stream_loop", "-1", "-i", str(music_path)])
     logo_input_index = None
     if resolved_logo:
-        logo_input_index = 2 if audio_path else 1
+        logo_input_index = 1 + (1 if audio_path else 0) + (1 if music_path else 0)
         command.extend(["-loop", "1", "-i", str(resolved_logo)])
-    caption_input_start = 1 + (1 if audio_path else 0) + (1 if resolved_logo else 0)
+    caption_input_start = 1 + (1 if audio_path else 0) + (1 if music_path else 0) + (1 if resolved_logo else 0)
     for caption in captions:
         command.extend(["-loop", "1", "-i", str(caption.image_path)])  # type: ignore[attr-defined]
 
-    filter_complex = build_filter_complex(
-        duration=duration,
-        style=style,
-        logo_input_index=logo_input_index,
-        captions=captions,
-        caption_input_start=caption_input_start,
-    )
+    filter_parts = [
+        build_filter_complex(
+            duration=duration,
+            style=style,
+            logo_input_index=logo_input_index,
+            captions=captions,
+            caption_input_start=caption_input_start,
+        )
+    ]
+    audio_label = None
+    if audio_path or music_path:
+        audio_filter, audio_label = build_audio_filter(
+            duration=duration,
+            voice_input_index=1 if audio_path else None,
+            music_input_index=music_input_index,
+            music_volume=music_volume,
+        )
+        filter_parts.append(audio_filter)
+    filter_complex = ";".join(filter_parts)
 
     command.extend(
         [
@@ -242,8 +262,8 @@ def render_short(
             "[v]",
         ]
     )
-    if audio_path:
-        command.extend(["-map", "1:a", "-shortest"])
+    if audio_label:
+        command.extend(["-map", audio_label])
     else:
         command.append("-an")
 
@@ -253,10 +273,15 @@ def render_short(
             "30",
             "-c:v",
             "libx264",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "160k",
             "-pix_fmt",
             "yuv420p",
             "-movflags",
             "+faststart",
+            "-shortest",
             str(output_path),
         ]
     )
@@ -266,6 +291,35 @@ def render_short(
         raise RenderError(result.stderr.strip() or "ffmpeg render failed")
 
     return output_path
+
+
+def build_audio_filter(
+    duration: float,
+    voice_input_index: Optional[int],
+    music_input_index: Optional[int],
+    music_volume: float,
+) -> tuple:
+    filters: List[str] = []
+    labels: List[str] = []
+    fade_start = max(0.0, duration - 1.0)
+    if voice_input_index is not None:
+        filters.append(f"[{voice_input_index}:a]volume=1.0,atrim=0:{duration},asetpts=PTS-STARTPTS[voicea]")
+        labels.append("[voicea]")
+    if music_input_index is not None:
+        volume = max(0.0, min(float(music_volume), 1.0))
+        filters.append(
+            f"[{music_input_index}:a]volume={volume:.3f},atrim=0:{duration},"
+            f"afade=t=out:st={fade_start:.2f}:d=1.0,asetpts=PTS-STARTPTS[musica]"
+        )
+        labels.append("[musica]")
+
+    if not labels:
+        return "", None
+    if len(labels) == 1:
+        filters.append(f"{labels[0]}anull[a]")
+    else:
+        filters.append(f"{''.join(labels)}amix=inputs={len(labels)}:duration=first:dropout_transition=0[a]")
+    return ";".join(filters), "[a]"
 
 
 def probe_video_duration(video_path: Path) -> float:

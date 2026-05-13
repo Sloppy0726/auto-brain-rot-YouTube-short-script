@@ -14,6 +14,8 @@
   "voiceover_dir": "assets/voiceovers",
   "make_voice": false,
   "voice": null,
+  "music_dir": "assets/music",
+  "music_volume": 0.1,
   "gameplay_dir": "assets/gameplay/clips",
   "gameplay_seed": null,
   "render_template": "auto",
