@@ -5,33 +5,32 @@ import os
 import re
 import urllib.error
 import urllib.request
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from .captions import estimate_duration_seconds, make_captions
 from .models import Brief, ShortScript
-from .topics import NICHE_HASHTAGS
+from .scriptgen import hashtags_for_brief, source_ideas_for_brief, fact_check_notes
 
 
-ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
-ANTHROPIC_VERSION = "2023-06-01"
-DEFAULT_MODEL = "claude-sonnet-4-5"
+OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
+DEFAULT_MODEL = "gpt-5-mini"
 
 
-class ClaudeError(RuntimeError):
+class OpenAIError(RuntimeError):
     pass
 
 
-def make_claude_script(brief: Brief, model: str = DEFAULT_MODEL) -> ShortScript:
-    payload = call_claude(prompt_for_brief(brief), model=model)
+def make_openai_script(brief: Brief, model: str = DEFAULT_MODEL) -> ShortScript:
+    payload = call_openai(prompt_for_brief(brief), model=model)
     data = parse_json_payload(payload)
 
     narration = require_string(data, "narration")
     duration = estimate_duration_seconds(narration)
     captions = make_captions(narration, duration)
 
-    hashtags = data.get("hashtags") or default_hashtags(brief)
-    fact_check_notes = data.get("fact_check_notes") or default_fact_check_notes(brief)
-    source_ideas = data.get("source_ideas") or ([] if brief.content_mode == "fiction" else brief.source_ideas)
+    hashtags = data.get("hashtags") or hashtags_for_brief(brief)
+    notes = data.get("fact_check_notes") or fact_check_notes(brief)
+    sources = data.get("source_ideas") or source_ideas_for_brief(brief)
 
     return ShortScript(
         title=require_string(data, "title", fallback=brief.title),
@@ -39,8 +38,8 @@ def make_claude_script(brief: Brief, model: str = DEFAULT_MODEL) -> ShortScript:
         hook=require_string(data, "hook", fallback=brief.hook),
         narration=narration,
         hashtags=[str(item) for item in hashtags][:6],
-        fact_check_notes=[str(item) for item in fact_check_notes],
-        source_ideas=[str(item) for item in source_ideas],
+        fact_check_notes=[str(item) for item in notes],
+        source_ideas=[str(item) for item in sources],
         estimated_seconds=duration,
         captions=captions,
         content_mode=brief.content_mode,
@@ -48,73 +47,84 @@ def make_claude_script(brief: Brief, model: str = DEFAULT_MODEL) -> ShortScript:
     )
 
 
-def default_hashtags(brief: Brief):
-    if brief.content_mode == "fiction":
-        return {
-            "micro-horror": ["#horrorstory", "#scarystory", "#shorts"],
-            "sci-fi-ai": ["#scifi", "#aitok", "#shorts"],
-            "moral-dilemma": ["#storytime", "#mystory", "#shorts"],
-            "workplace-drama": ["#workstory", "#corporatestories", "#shorts"],
-            "relationship-drama": ["#storytime", "#drama", "#shorts"],
-        }.get(brief.fiction_genre, ["#storytime", "#shorts"])
-    return NICHE_HASHTAGS.get(brief.niche, ["#shorts"])
-
-
-def default_fact_check_notes(brief: Brief):
-    if brief.content_mode == "fiction":
-        return [
-            "Fiction. Do not present this as a true event.",
-            "Check for accidental similarity to existing stories before publishing.",
-            "Keep titles/descriptions clear that the channel publishes original fiction.",
-        ]
-    return [
-        "Verify every factual claim before publishing.",
-        "Add source URLs before upload.",
-    ]
-
-
-def call_claude(user_prompt: str, model: str) -> str:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+def call_openai(user_prompt: str, model: str) -> str:
+    api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        raise ClaudeError("ANTHROPIC_API_KEY is not set.")
+        raise OpenAIError("OPENAI_API_KEY is not set.")
 
     body = {
-        "model": os.environ.get("CLAUDE_MODEL", model),
-        "max_tokens": 1400,
-        "temperature": 0.8,
-        "system": (
+        "model": os.environ.get("OPENAI_SCRIPT_MODEL", model),
+        "instructions": (
             "You write original YouTube Shorts scripts for an infotainment channel. "
-            "You avoid plagiarism, unsupported specifics, and copyrighted text. "
-            "You return strict JSON only."
+            "Avoid plagiarism, unsupported specifics, and copyrighted text. "
+            "Return only valid JSON matching the requested shape."
         ),
-        "messages": [{"role": "user", "content": user_prompt}],
+        "input": user_prompt,
+        "max_output_tokens": 1400,
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "short_script",
+                "strict": True,
+                "schema": script_schema(),
+            }
+        },
     }
     request = urllib.request.Request(
-        ANTHROPIC_URL,
+        OPENAI_RESPONSES_URL,
         data=json.dumps(body).encode("utf-8"),
         headers={
-            "content-type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": ANTHROPIC_VERSION,
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
         },
         method="POST",
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=45) as response:
+        with urllib.request.urlopen(request, timeout=60) as response:
             response_data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise ClaudeError(f"Claude API error {exc.code}: {detail}") from exc
+        raise OpenAIError(f"OpenAI API error {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
-        raise ClaudeError(f"Claude API request failed: {exc.reason}") from exc
+        raise OpenAIError(f"OpenAI API request failed: {exc.reason}") from exc
 
-    content = response_data.get("content", [])
-    text_blocks = [block.get("text", "") for block in content if block.get("type") == "text"]
-    text = "\n".join(text_blocks).strip()
+    text = extract_response_text(response_data)
     if not text:
-        raise ClaudeError("Claude returned no text content.")
+        raise OpenAIError("OpenAI returned no text content.")
     return text
+
+
+def extract_response_text(response_data: Dict[str, Any]) -> str:
+    if isinstance(response_data.get("output_text"), str):
+        return str(response_data["output_text"]).strip()
+
+    chunks: List[str] = []
+    for item in response_data.get("output", []):
+        if not isinstance(item, dict):
+            continue
+        for content in item.get("content", []):
+            if not isinstance(content, dict):
+                continue
+            if content.get("type") in {"output_text", "text"} and isinstance(content.get("text"), str):
+                chunks.append(str(content["text"]))
+    return "\n".join(chunks).strip()
+
+
+def script_schema() -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["title", "hook", "narration", "hashtags", "fact_check_notes", "source_ideas"],
+        "properties": {
+            "title": {"type": "string"},
+            "hook": {"type": "string"},
+            "narration": {"type": "string"},
+            "hashtags": {"type": "array", "items": {"type": "string"}},
+            "fact_check_notes": {"type": "array", "items": {"type": "string"}},
+            "source_ideas": {"type": "array", "items": {"type": "string"}},
+        },
+    }
 
 
 def prompt_for_brief(brief: Brief) -> str:
@@ -189,15 +199,15 @@ def parse_json_payload(text: str) -> Dict[str, Any]:
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if not match:
-            raise ClaudeError("Claude did not return JSON.")
+            raise OpenAIError("OpenAI did not return JSON.")
         try:
             return json.loads(match.group(0))
         except json.JSONDecodeError as exc:
-            raise ClaudeError(f"Claude returned invalid JSON: {exc}") from exc
+            raise OpenAIError(f"OpenAI returned invalid JSON: {exc}") from exc
 
 
 def require_string(data: Dict[str, Any], key: str, fallback: str = "") -> str:
     value = data.get(key, fallback)
     if not isinstance(value, str) or not value.strip():
-        raise ClaudeError(f"Claude JSON is missing '{key}'.")
+        raise OpenAIError(f"OpenAI JSON is missing '{key}'.")
     return value.strip()

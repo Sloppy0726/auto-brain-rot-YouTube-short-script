@@ -16,7 +16,7 @@ It can:
 - Apply genre-aware visual templates with timed highlighted captions.
 - Overlay an optional per-channel logo.
 - Render a 1080x1920 split-screen Short with captions on top and your gameplay on the bottom using `ffmpeg`.
-- Use either the offline template backend or Claude through Anthropic's Messages API.
+- Use either the offline template backend or OpenAI through the Responses API.
 
 ## Setup
 
@@ -40,30 +40,34 @@ brew install ffmpeg
 
 ## Quick Start
 
-Generate three scripts:
+OpenAI examples assume this is set in your shell:
+
+```bash
+export OPENAI_API_KEY="your_api_key"
+```
+
+Generate three scripts with OpenAI:
 
 ```bash
 python -m brainrot create --count 3 --out-dir output/today
 ```
 
-Generate three scripts with Claude:
+Generate three offline template scripts without an API key:
 
 ```bash
-export ANTHROPIC_API_KEY="your_api_key"
 python -m brainrot create \
   --count 3 \
-  --backend claude \
-  --model claude-sonnet-4-5 \
+  --backend template \
   --out-dir output/today
 ```
 
 Run the full agent pipeline:
 
 ```bash
-export ANTHROPIC_API_KEY="your_api_key"
 python -m brainrot pipeline \
   --count 3 \
-  --backend claude \
+  --backend openai \
+  --model gpt-5-mini \
   --niches scams,business,ai,internet,money \
   --extra-subreddits SideProject,ProductivityApps \
   --max-subreddits 60 \
@@ -77,7 +81,8 @@ python -m brainrot pipeline \
   --count 3 \
   --content-mode fiction \
   --fiction-genre micro-horror \
-  --backend claude \
+  --backend openai \
+  --model gpt-5-mini \
   --out-dir output/micro-horror
 ```
 
@@ -88,7 +93,8 @@ python -m brainrot pipeline \
   --count 4 \
   --content-mode fiction \
   --fiction-genre micro-horror,sci-fi-ai \
-  --backend claude \
+  --backend openai \
+  --model gpt-5-mini \
   --out-dir output/fiction-batch
 ```
 
@@ -97,7 +103,8 @@ Render with your recorded voiceover and gameplay footage:
 ```bash
 python -m brainrot pipeline \
   --count 3 \
-  --backend claude \
+  --backend openai \
+  --model gpt-5-mini \
   --voiceover-dir assets/voiceovers \
   --gameplay-dir assets/gameplay/clips \
   --channel example-channel \
@@ -148,7 +155,8 @@ Run the pipeline and publish any rendered videos:
 ```bash
 python -m brainrot pipeline \
   --count 3 \
-  --backend claude \
+  --backend openai \
+  --model gpt-5-mini \
   --voiceover-dir assets/voiceovers \
   --gameplay-dir assets/gameplay/clips \
   --channel example-channel \
@@ -182,7 +190,8 @@ Generate one script for a specific topic:
 python -m brainrot script \
   --topic "How fake QR code parking tickets work" \
   --niche scams \
-  --backend claude \
+  --backend openai \
+  --model gpt-5-mini \
   --out-dir output/qr-ticket
 ```
 
@@ -213,11 +222,10 @@ Use this when you want to go from scripts to finished rendered Shorts.
 Replace the placeholder values:
 
 ```bash
-export ANTHROPIC_API_KEY="your_anthropic_api_key_here"
 export OPENAI_API_KEY="your_openai_api_key_here"
 ```
 
-`ANTHROPIC_API_KEY` is used when `--backend claude` writes scripts. `OPENAI_API_KEY` is only needed when `--caption-sync word` transcribes your recorded voiceover with Whisper.
+`OPENAI_API_KEY` is used for both script generation with `--backend openai` and word-level caption sync with `--caption-sync word`.
 
 ### 2. Choose channel and content settings
 
@@ -225,6 +233,7 @@ Change these values for your channel:
 
 ```bash
 COUNT=3
+MODEL="gpt-5-mini"
 CHANNEL="example-channel"
 CONTENT_MODE="fiction"
 FICTION_GENRE="micro-horror"
@@ -242,6 +251,7 @@ Common parameters to change:
 | Parameter | What it controls | Example values |
 | --- | --- | --- |
 | `COUNT` | How many scripts/videos to create in the run. | `1`, `3`, `10` |
+| `MODEL` | OpenAI model used to write scripts. | `gpt-5-mini`, `gpt-5.2` |
 | `CHANNEL` | Which logo folder to use from `assets/logos/<channel>/`. | `example-channel`, `horror-channel` |
 | `CONTENT_MODE` | Whether ideas are nonfiction topics or fiction story seeds. | `fiction`, `nonfiction` |
 | `FICTION_GENRE` | Fiction genre when `CONTENT_MODE="fiction"`. | `micro-horror`, `sci-fi-ai`, `moral-dilemma`, `workplace-drama`, `relationship-drama` |
@@ -256,7 +266,8 @@ Common parameters to change:
 ```bash
 python -m brainrot pipeline \
   --count "$COUNT" \
-  --backend claude \
+  --backend openai \
+  --model "$MODEL" \
   --content-mode "$CONTENT_MODE" \
   --fiction-genre "$FICTION_GENRE" \
   --channel "$CHANNEL" \
@@ -264,6 +275,8 @@ python -m brainrot pipeline \
 ```
 
 Review the generated `.md` files in `output/today/`, then record the voiceover for each script.
+
+For nonfiction runs, add `--niches "$NICHES"` and remove `--fiction-genre "$FICTION_GENRE"`.
 
 ### 4. Add voiceovers, gameplay, and logo
 
@@ -295,7 +308,8 @@ This matches voiceovers by filename, picks a gameplay clip, chooses a random-loo
 ```bash
 python -m brainrot pipeline \
   --count "$COUNT" \
-  --backend claude \
+  --backend openai \
+  --model "$MODEL" \
   --content-mode "$CONTENT_MODE" \
   --fiction-genre "$FICTION_GENRE" \
   --voiceover-dir assets/voiceovers \
@@ -328,7 +342,8 @@ Only add `--publish` once the rendered Shorts look good:
 ```bash
 python -m brainrot pipeline \
   --count "$COUNT" \
-  --backend claude \
+  --backend openai \
+  --model "$MODEL" \
   --content-mode "$CONTENT_MODE" \
   --fiction-genre "$FICTION_GENRE" \
   --voiceover-dir assets/voiceovers \
@@ -348,7 +363,7 @@ Change `PRIVACY_STATUS` to `unlisted` or `public` only when you are ready.
 1. Choose `--content-mode nonfiction` or `--content-mode fiction`.
 2. For nonfiction, Idea Agent scans Reddit for fast-moving leads.
 3. For fiction, Idea Agent generates original story seeds for the selected `--fiction-genre`.
-4. Script Agent asks Claude for original 45-60 second scripts.
+4. Script Agent asks OpenAI for original 45-60 second scripts.
 5. You fact-check nonfiction claims or review fiction for originality.
 6. Record the voiceover from the Markdown script.
 7. Save the recording with the same slug as the script JSON.
@@ -401,7 +416,7 @@ python -m brainrot pipeline --content-mode fiction --fiction-genre workplace-dra
 
 Script Agent:
 
-- Uses `--backend claude` for Anthropic's Messages API.
+- Uses `--backend openai` for OpenAI's Responses API.
 - Uses `--backend template` for offline draft scripts.
 - Produces JSON, Markdown, and SRT caption files.
 
@@ -494,7 +509,7 @@ Use this as an original-content assistant, not a scraper. YouTube can reject mon
 brainrot/
   agents.py      Idea, script, and video agent workflow.
   cli.py         Command line interface.
-  claude.py      Claude API backend.
+  openai.py      OpenAI script backend.
   youtube.py     YouTube upload and analytics backend.
   topics.py      Niche/topic bank.
   scriptgen.py   Script and brief generation.

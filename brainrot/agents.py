@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .audio import AudioError, sync_script_file_to_voiceover
-from .claude import DEFAULT_MODEL, make_claude_script
 from .files import load_script, write_script_bundle
 from .fiction import make_fiction_briefs
 from .models import Brief, ShortScript
+from .openai import DEFAULT_MODEL, make_openai_script
 from .render import RenderError, render_short
 from .scriptgen import make_script
 from .topics import make_briefs, source_ideas
@@ -57,7 +57,6 @@ SUBREDDITS_BY_NICHE = {
         "LocalLLaMA",
         "ChatGPT",
         "OpenAI",
-        "ClaudeAI",
     ],
     "internet": [
         "todayilearned",
@@ -268,13 +267,13 @@ class PublisherAgent:
 
 
 class ScriptAgent:
-    def __init__(self, backend: str = "template", model: str = DEFAULT_MODEL) -> None:
+    def __init__(self, backend: str = "openai", model: str = DEFAULT_MODEL) -> None:
         self.backend = backend
         self.model = model
 
     def write_script(self, brief: Brief) -> ShortScript:
-        if self.backend == "claude":
-            return make_claude_script(brief, model=self.model)
+        if self.backend == "openai":
+            return make_openai_script(brief, model=self.model)
         return make_script(brief)
 
 
@@ -445,7 +444,7 @@ class VideoAgent:
 def run_pipeline(
     count: int,
     out_dir: Path,
-    backend: str = "template",
+    backend: str = "openai",
     model: str = DEFAULT_MODEL,
     subreddits: Optional[List[str]] = None,
     content_mode: str = "nonfiction",

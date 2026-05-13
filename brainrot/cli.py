@@ -7,10 +7,10 @@ from typing import Optional
 
 from .agents import DEFAULT_NICHES, run_pipeline, resolve_subreddits
 from .audio import AudioError, sync_script_file_to_voiceover
-from .claude import ClaudeError, DEFAULT_MODEL, make_claude_script
 from .files import load_script, slugify, write_script_bundle
 from .fiction import list_fiction_genres
 from .models import Brief
+from .openai import DEFAULT_MODEL, OpenAIError, make_openai_script
 from .render import RenderError, render_short
 from .scriptgen import make_script
 from .topics import list_niches, make_briefs, source_ideas
@@ -36,7 +36,7 @@ def main() -> None:
     create_parser.add_argument("--niche", default="all", choices=["all"] + list_niches())
     create_parser.add_argument("--seed", type=int)
     create_parser.add_argument("--out-dir", default="output/today")
-    create_parser.add_argument("--backend", choices=["template", "claude"], default="template")
+    create_parser.add_argument("--backend", choices=["template", "openai"], default="openai")
     create_parser.add_argument("--model", default=DEFAULT_MODEL)
 
     script_parser = subparsers.add_parser("script", help="Generate one Short script from a topic.")
@@ -45,7 +45,7 @@ def main() -> None:
     script_parser.add_argument("--hook")
     script_parser.add_argument("--angle")
     script_parser.add_argument("--out-dir", default="output/script")
-    script_parser.add_argument("--backend", choices=["template", "claude"], default="template")
+    script_parser.add_argument("--backend", choices=["template", "openai"], default="openai")
     script_parser.add_argument("--model", default=DEFAULT_MODEL)
 
     voice_parser = subparsers.add_parser("voice", help="Optional fallback: generate macOS say voiceover audio.")
@@ -72,7 +72,7 @@ def main() -> None:
     pipeline_parser = subparsers.add_parser("pipeline", help="Run idea, script, and optional video agents.")
     pipeline_parser.add_argument("--count", type=int, default=3)
     pipeline_parser.add_argument("--out-dir", default="output/today")
-    pipeline_parser.add_argument("--backend", choices=["template", "claude"], default="claude")
+    pipeline_parser.add_argument("--backend", choices=["template", "openai"], default="openai")
     pipeline_parser.add_argument("--model", default=DEFAULT_MODEL)
     pipeline_parser.add_argument("--content-mode", choices=["nonfiction", "fiction"], default="nonfiction")
     pipeline_parser.add_argument("--fiction-genre", default="micro-horror")
@@ -428,7 +428,7 @@ def create_pipeline(
             client_secrets=client_secrets,
             token_path=token_path,
         )
-    except (ClaudeError, YouTubeError, AudioError) as exc:
+    except (OpenAIError, YouTubeError, AudioError) as exc:
         raise SystemExit(str(exc))
 
     print(f"Pipeline created {len(items)} Short bundle(s) in {out_dir}")
@@ -550,10 +550,12 @@ def default_hook(topic: str) -> str:
 def build_script(brief: Brief, backend: str, model: str):
     if backend == "template":
         return make_script(brief)
-    try:
-        return make_claude_script(brief, model=model)
-    except ClaudeError as exc:
-        raise SystemExit(str(exc))
+    if backend == "openai":
+        try:
+            return make_openai_script(brief, model=model)
+        except OpenAIError as exc:
+            raise SystemExit(str(exc))
+    raise SystemExit(f"Unknown script backend: {backend}")
 
 
 if __name__ == "__main__":
