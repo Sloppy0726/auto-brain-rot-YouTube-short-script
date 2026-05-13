@@ -18,6 +18,9 @@ from .voice import VoiceError, make_voiceover
 from .youtube import YouTubeAgent, YouTubeError, make_upload_description
 
 
+AUDIO_EXTENSIONS = [".wav", ".mp3", ".m4a", ".aac", ".aiff", ".aif", ".flac", ".ogg"]
+
+
 SUBREDDITS_BY_NICHE = {
     "scams": [
         "scams",
@@ -262,23 +265,35 @@ class VideoAgent:
         self,
         make_voice: bool = False,
         voice: Optional[str] = None,
+        voiceover: Optional[Path] = None,
+        voiceover_dir: Optional[Path] = None,
         gameplay: Optional[Path] = None,
     ) -> None:
         self.make_voice = make_voice
         self.voice = voice
+        self.voiceover = voiceover
+        self.voiceover_dir = voiceover_dir
         self.gameplay = gameplay
 
     def produce(self, script_json: Path, out_dir: Path) -> Dict[str, object]:
         script = load_script(script_json)
         result: Dict[str, object] = {"audio": None, "video": None, "warnings": []}
-        audio_path: Optional[Path] = None
+        audio_path, voiceover_warning = self.resolve_recorded_voiceover(script_json)
+        if voiceover_warning:
+            result["warnings"].append(voiceover_warning)
+        if audio_path:
+            result["audio"] = audio_path
 
-        if self.make_voice:
+        if not audio_path and self.make_voice:
             try:
                 audio_path = make_voiceover(script, out_dir, voice=self.voice)
                 result["audio"] = audio_path
             except VoiceError as exc:
                 result["warnings"].append(str(exc))
+
+        if self.gameplay and self.expects_recorded_voiceover() and not audio_path:
+            result["warnings"].append("Skipped render because no recorded voiceover audio was found.")
+            return result
 
         if self.gameplay:
             try:
@@ -294,6 +309,29 @@ class VideoAgent:
 
         return result
 
+    def expects_recorded_voiceover(self) -> bool:
+        return bool(self.voiceover or self.voiceover_dir)
+
+    def resolve_recorded_voiceover(self, script_json: Path) -> tuple:
+        if self.voiceover:
+            if self.voiceover.exists():
+                return self.voiceover, None
+            return None, f"Recorded voiceover file does not exist: {self.voiceover}"
+
+        if not self.voiceover_dir:
+            return None, None
+
+        if not self.voiceover_dir.exists():
+            return None, f"Recorded voiceover directory does not exist: {self.voiceover_dir}"
+
+        for extension in AUDIO_EXTENSIONS:
+            candidate = self.voiceover_dir / f"{script_json.stem}{extension}"
+            if candidate.exists():
+                return candidate, None
+
+        extensions = ", ".join(AUDIO_EXTENSIONS)
+        return None, f"No recorded voiceover found for {script_json.stem}. Expected one of: {extensions}"
+
 
 def run_pipeline(
     count: int,
@@ -306,6 +344,8 @@ def run_pipeline(
     reddit_time: str = "day",
     make_voice: bool = False,
     voice: Optional[str] = None,
+    voiceover: Optional[Path] = None,
+    voiceover_dir: Optional[Path] = None,
     gameplay: Optional[Path] = None,
     publish: bool = False,
     privacy_status: str = "private",
@@ -321,7 +361,13 @@ def run_pipeline(
         reddit_time=reddit_time,
     )
     script_agent = ScriptAgent(backend=backend, model=model)
-    video_agent = VideoAgent(make_voice=make_voice, voice=voice, gameplay=gameplay)
+    video_agent = VideoAgent(
+        make_voice=make_voice,
+        voice=voice,
+        voiceover=voiceover,
+        voiceover_dir=voiceover_dir,
+        gameplay=gameplay,
+    )
     publisher_agent = (
         PublisherAgent(
             client_secrets=client_secrets,

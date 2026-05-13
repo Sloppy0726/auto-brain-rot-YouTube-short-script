@@ -10,7 +10,7 @@ It can:
 - Pull topic leads from many Reddit communities, then mark them for verification.
 - Write 45-60 second narration scripts.
 - Estimate punchy caption timing and export `.srt`.
-- Generate macOS `say` voiceover audio.
+- Match your recorded voiceover files to generated scripts.
 - Render a 1080x1920 split-screen Short with captions on top and your gameplay on the bottom using `ffmpeg`.
 - Use either the offline template backend or Claude through Anthropic's Messages API.
 
@@ -66,14 +66,13 @@ python -m brainrot pipeline \
   --out-dir output/today
 ```
 
-Add voice and rendering when you have gameplay footage:
+Render with your recorded voiceover and gameplay footage:
 
 ```bash
 python -m brainrot pipeline \
   --count 3 \
   --backend claude \
-  --make-voice \
-  --voice Samantha \
+  --voiceover-dir assets/voiceovers \
   --gameplay assets/gameplay/example.mp4 \
   --out-dir output/today
 ```
@@ -93,7 +92,7 @@ Run the pipeline and publish any rendered videos:
 python -m brainrot pipeline \
   --count 3 \
   --backend claude \
-  --make-voice \
+  --voiceover-dir assets/voiceovers \
   --gameplay assets/gameplay/example.mp4 \
   --publish \
   --privacy-status private \
@@ -129,19 +128,19 @@ python -m brainrot script \
   --out-dir output/qr-ticket
 ```
 
-Generate voiceover audio with macOS `say`:
+Optional fallback: generate scratch voiceover audio with macOS `say`:
 
 ```bash
 python -m brainrot voice output/qr-ticket/how-fake-qr-code-parking-tickets-work.json
 ```
 
-Render a Short using gameplay you recorded yourself:
+Render a Short using gameplay and voiceover you recorded yourself:
 
 ```bash
 python -m brainrot render \
   output/qr-ticket/how-fake-qr-code-parking-tickets-work.json \
   --gameplay assets/gameplay/example.mp4 \
-  --audio output/qr-ticket/how-fake-qr-code-parking-tickets-work.aiff \
+  --voiceover assets/voiceovers/how-fake-qr-code-parking-tickets-work.wav \
   --out output/qr-ticket/final.mp4
 ```
 
@@ -151,8 +150,17 @@ python -m brainrot render \
 2. You pick or keep the strongest 3 hooks.
 3. Script Agent asks Claude for original 45-60 second scripts.
 4. You fact-check claims and add source links in the JSON.
-5. Video Agent creates captions, optional voiceover, and optional split-screen renders.
-6. Review the final video before uploading.
+5. Record the voiceover from the Markdown script.
+6. Save the recording with the same slug as the script JSON.
+7. Video Agent matches the recorded audio, captions, and gameplay into a split-screen render.
+8. Review the final video before uploading.
+
+Example:
+
+```text
+output/today/how-fake-qr-code-parking-tickets-work.json
+assets/voiceovers/how-fake-qr-code-parking-tickets-work.wav
+```
 
 ## Agents
 
@@ -172,7 +180,9 @@ Script Agent:
 
 Video Agent:
 
-- Uses macOS `say` when `--make-voice` is passed.
+- Uses your recorded audio when `--voiceover` or `--voiceover-dir` is passed.
+- Matches `--voiceover-dir` files by script slug, with `.wav`, `.mp3`, `.m4a`, `.aac`, `.aiff`, `.aif`, `.flac`, or `.ogg`.
+- Can still use macOS `say` when `--make-voice` is passed as a scratch fallback.
 - Uses `ffmpeg` to render final split-screen videos when `--gameplay` is passed.
 - Skips rendering and leaves warnings if required tools or assets are missing.
 
@@ -203,7 +213,7 @@ The YouTube upload agent uses these scopes:
 Use this as an original-content assistant, not a scraper. YouTube can reject monetization for reused, repetitive, or low-originality videos. The safer version is:
 
 - Original scripts.
-- Your own voice or a consistent licensed AI voice.
+- Your own recorded voice.
 - Self-recorded or licensed gameplay.
 - Factual claims checked against reliable sources.
 - A recognizable niche and editorial style.
@@ -222,5 +232,6 @@ brainrot/
   render.py      ffmpeg renderer.
 assets/
   gameplay/      Put your own gameplay clips here.
+  voiceovers/    Put your recorded narration files here.
 output/          Generated scripts, captions, audio, and videos.
 ```

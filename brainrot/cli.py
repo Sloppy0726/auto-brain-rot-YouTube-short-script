@@ -46,7 +46,7 @@ def main() -> None:
     script_parser.add_argument("--backend", choices=["template", "claude"], default="template")
     script_parser.add_argument("--model", default=DEFAULT_MODEL)
 
-    voice_parser = subparsers.add_parser("voice", help="Generate macOS say voiceover audio from a script JSON.")
+    voice_parser = subparsers.add_parser("voice", help="Optional fallback: generate macOS say voiceover audio.")
     voice_parser.add_argument("script_json")
     voice_parser.add_argument("--voice")
     voice_parser.add_argument("--out-dir")
@@ -54,7 +54,7 @@ def main() -> None:
     render_parser = subparsers.add_parser("render", help="Render a split-screen Short with ffmpeg.")
     render_parser.add_argument("script_json")
     render_parser.add_argument("--gameplay", required=True)
-    render_parser.add_argument("--audio")
+    render_parser.add_argument("--audio", "--voiceover", dest="audio")
     render_parser.add_argument("--out")
     render_parser.add_argument("--font", default="Arial Black")
 
@@ -72,6 +72,8 @@ def main() -> None:
     pipeline_parser.add_argument("--reddit-time", choices=["hour", "day", "week", "month", "year", "all"], default="day")
     pipeline_parser.add_argument("--make-voice", action="store_true")
     pipeline_parser.add_argument("--voice")
+    pipeline_parser.add_argument("--voiceover")
+    pipeline_parser.add_argument("--voiceover-dir")
     pipeline_parser.add_argument("--gameplay")
     pipeline_parser.add_argument("--publish", action="store_true")
     pipeline_parser.add_argument("--privacy-status", choices=["private", "unlisted", "public"], default="private")
@@ -155,6 +157,8 @@ def main() -> None:
             reddit_time=args.reddit_time,
             make_voice=args.make_voice,
             voice=args.voice,
+            voiceover=Path(args.voiceover) if args.voiceover else None,
+            voiceover_dir=Path(args.voiceover_dir) if args.voiceover_dir else None,
             gameplay=Path(args.gameplay) if args.gameplay else None,
             publish=args.publish,
             privacy_status=args.privacy_status,
@@ -272,6 +276,8 @@ def create_pipeline(
     reddit_time: str,
     make_voice: bool,
     voice: Optional[str],
+    voiceover: Optional[Path],
+    voiceover_dir: Optional[Path],
     gameplay: Optional[Path],
     publish: bool,
     privacy_status: str,
@@ -298,6 +304,8 @@ def create_pipeline(
             reddit_time=reddit_time,
             make_voice=make_voice,
             voice=voice,
+            voiceover=voiceover,
+            voiceover_dir=voiceover_dir,
             gameplay=gameplay,
             publish=publish,
             privacy_status=privacy_status,
