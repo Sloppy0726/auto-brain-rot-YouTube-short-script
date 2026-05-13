@@ -377,6 +377,7 @@ class VideoAgent:
                     channel=self.channel,
                     logo_path=self.logo,
                     logo_dir=self.logo_dir,
+                    gameplay_seed=self.render_gameplay_seed(script_json, gameplay_path),
                 )
                 result["video"] = video_path
             except RenderError as exc:
@@ -435,6 +436,10 @@ class VideoAgent:
         seed = f"{self.gameplay_seed}:{script_json.stem}" if self.gameplay_seed is not None else script_json.stem
         rng = random.Random(seed)
         return clips[rng.randrange(len(clips))], None
+
+    def render_gameplay_seed(self, script_json: Path, gameplay_path: Path) -> str:
+        prefix = str(self.gameplay_seed) if self.gameplay_seed is not None else "auto"
+        return f"{prefix}:{script_json.stem}:{gameplay_path}"
 
 
 def run_pipeline(

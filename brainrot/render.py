@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -180,6 +181,8 @@ def render_short(
     logo_path: Optional[Path] = None,
     channel: Optional[str] = None,
     logo_dir: Path = Path("assets/logos"),
+    gameplay_start: Optional[float] = None,
+    gameplay_seed: Optional[str] = None,
 ) -> Path:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
@@ -195,15 +198,22 @@ def render_short(
     style = style_for_script(script, render_template)
     captions = write_caption_images_from_json(script, output_path.parent, style=style, font_name=font_name)
     duration = float(script.get("estimated_seconds", 55.0))
+    selected_gameplay_start = resolve_gameplay_start(
+        gameplay_path=gameplay_path,
+        render_duration=duration,
+        requested_start=gameplay_start,
+        seed=gameplay_seed or str(script.get("title", "")),
+    )
 
     command = [
         ffmpeg,
         "-y",
         "-stream_loop",
         "-1",
-        "-i",
-        str(gameplay_path),
     ]
+    if selected_gameplay_start > 0:
+        command.extend(["-ss", f"{selected_gameplay_start:.2f}"])
+    command.extend(["-i", str(gameplay_path)])
     if audio_path:
         command.extend(["-i", str(audio_path)])
     logo_input_index = None
@@ -256,6 +266,50 @@ def render_short(
         raise RenderError(result.stderr.strip() or "ffmpeg render failed")
 
     return output_path
+
+
+def probe_video_duration(video_path: Path) -> float:
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        raise RenderError("ffprobe is not installed. Install ffmpeg with: brew install ffmpeg")
+
+    command = [
+        ffprobe,
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(video_path),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RenderError(result.stderr.strip() or f"Could not read gameplay duration: {video_path}")
+
+    try:
+        duration = float(result.stdout.strip())
+    except ValueError as exc:
+        raise RenderError(f"Invalid gameplay duration from ffprobe: {result.stdout!r}") from exc
+
+    if duration <= 0:
+        raise RenderError(f"Gameplay duration must be greater than zero: {video_path}")
+    return round(duration, 2)
+
+
+def resolve_gameplay_start(
+    gameplay_path: Path,
+    render_duration: float,
+    requested_start: Optional[float] = None,
+    seed: Optional[str] = None,
+) -> float:
+    gameplay_duration = probe_video_duration(gameplay_path)
+    max_start = max(0.0, gameplay_duration - render_duration)
+    if requested_start is not None:
+        return round(max(0.0, min(float(requested_start), max_start)), 2)
+    if max_start <= 0.25:
+        return 0.0
+    return round(random.Random(seed or str(gameplay_path)).uniform(0.0, max_start), 2)
 
 
 def escape_filter_path(path: Path) -> str:

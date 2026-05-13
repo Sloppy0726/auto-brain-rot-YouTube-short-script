@@ -110,7 +110,7 @@ Put your gameplay/satisfying footage here:
 assets/gameplay/clips/
 ```
 
-The pipeline picks one clip per script. The choice is deterministic by script slug so reruns are stable. Use `--gameplay-seed 42` to rotate selections.
+The pipeline picks one clip per script, then starts at a random-looking point inside that clip for the background segment. The choice is deterministic by script slug so reruns are stable. Use `--gameplay-seed 42` to rotate clip selections and start points.
 
 Put channel logos here:
 
@@ -198,6 +198,7 @@ Render a Short using gameplay and voiceover you recorded yourself:
 python -m brainrot render \
   output/qr-ticket/how-fake-qr-code-parking-tickets-work.json \
   --gameplay assets/gameplay/example.mp4 \
+  --gameplay-seed 42 \
   --voiceover assets/voiceovers/how-fake-qr-code-parking-tickets-work.wav \
   --channel example-channel \
   --out output/qr-ticket/final.mp4
@@ -272,7 +273,8 @@ Video Agent:
 - Uses `--caption-sync word` to transcribe the voiceover with Whisper and time captions from returned word timestamps.
 - Matches `--voiceover-dir` files by script slug, with `.wav`, `.mp3`, `.m4a`, `.aac`, `.aiff`, `.aif`, `.flac`, or `.ogg`.
 - Uses `--gameplay-dir` to pick from `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv` clips.
-- Uses `--gameplay` when you want to force one exact clip.
+- Uses a random-looking start point inside long gameplay clips, so one 1-2 hour source file can produce many different Shorts.
+- Uses `--gameplay` when you want to force one exact clip, and `--gameplay-start` when you want to force the exact start time in seconds.
 - Uses `--channel` to load `assets/logos/<channel>/logo.png`.
 - Uses `--render-template auto` to style captions by fiction genre or nonfiction niche.
 - Can still use macOS `say` when `--make-voice` is passed as a scratch fallback.

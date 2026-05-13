@@ -56,6 +56,8 @@ def main() -> None:
     render_parser = subparsers.add_parser("render", help="Render a split-screen Short with ffmpeg.")
     render_parser.add_argument("script_json")
     render_parser.add_argument("--gameplay", required=True)
+    render_parser.add_argument("--gameplay-seed", type=int)
+    render_parser.add_argument("--gameplay-start", type=float)
     render_parser.add_argument("--audio", "--voiceover", dest="audio")
     render_parser.add_argument("--out")
     render_parser.add_argument("--font", default="Arial Black")
@@ -159,6 +161,8 @@ def main() -> None:
         create_render(
             script_json=Path(args.script_json),
             gameplay=Path(args.gameplay),
+            gameplay_seed=args.gameplay_seed,
+            gameplay_start=args.gameplay_start,
             audio=Path(args.audio) if args.audio else None,
             out=Path(args.out) if args.out else None,
             font=args.font,
@@ -287,6 +291,8 @@ def create_voice(script_json: Path, voice: Optional[str], out_dir: Optional[str]
 def create_render(
     script_json: Path,
     gameplay: Path,
+    gameplay_seed: Optional[int],
+    gameplay_start: Optional[float],
     audio: Optional[Path],
     out: Optional[Path],
     font: str,
@@ -325,10 +331,21 @@ def create_render(
             channel=channel,
             logo_path=logo,
             logo_dir=logo_dir,
+            gameplay_start=gameplay_start,
+            gameplay_seed=resolve_gameplay_render_seed(
+                gameplay_seed=gameplay_seed,
+                script_stem=script_json.stem,
+                gameplay=gameplay,
+            ),
         )
     except RenderError as exc:
         raise SystemExit(str(exc))
     print(f"Rendered Short: {rendered}")
+
+
+def resolve_gameplay_render_seed(gameplay_seed: Optional[int], script_stem: str, gameplay: Path) -> str:
+    prefix = str(gameplay_seed) if gameplay_seed is not None else "auto"
+    return f"{prefix}:{script_stem}:{gameplay}"
 
 
 def create_pipeline(
