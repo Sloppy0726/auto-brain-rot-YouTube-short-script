@@ -204,6 +204,145 @@ python -m brainrot render \
   --out output/qr-ticket/final.mp4
 ```
 
+## End-to-End Workflow
+
+Use this when you want to go from scripts to finished rendered Shorts.
+
+### 1. Add API keys
+
+Replace the placeholder values:
+
+```bash
+export ANTHROPIC_API_KEY="your_anthropic_api_key_here"
+export OPENAI_API_KEY="your_openai_api_key_here"
+```
+
+`ANTHROPIC_API_KEY` is used when `--backend claude` writes scripts. `OPENAI_API_KEY` is only needed when `--caption-sync word` transcribes your recorded voiceover with Whisper.
+
+### 2. Choose channel and content settings
+
+Change these values for your channel:
+
+```bash
+COUNT=3
+CHANNEL="example-channel"
+CONTENT_MODE="fiction"
+FICTION_GENRE="micro-horror"
+NICHES="scams,business,ai,internet,money"
+OUT_DIR="output/today"
+GAMEPLAY_SEED=42
+CAPTION_SYNC="word"
+PRIVACY_STATUS="private"
+```
+
+For nonfiction, use `CONTENT_MODE="nonfiction"` and remove the `--fiction-genre` line from the pipeline command.
+
+Common parameters to change:
+
+| Parameter | What it controls | Example values |
+| --- | --- | --- |
+| `COUNT` | How many scripts/videos to create in the run. | `1`, `3`, `10` |
+| `CHANNEL` | Which logo folder to use from `assets/logos/<channel>/`. | `example-channel`, `horror-channel` |
+| `CONTENT_MODE` | Whether ideas are nonfiction topics or fiction story seeds. | `fiction`, `nonfiction` |
+| `FICTION_GENRE` | Fiction genre when `CONTENT_MODE="fiction"`. | `micro-horror`, `sci-fi-ai`, `moral-dilemma`, `workplace-drama`, `relationship-drama` |
+| `NICHES` | Nonfiction topic niches when `CONTENT_MODE="nonfiction"`. | `scams,business,ai`, `internet,law,money` |
+| `OUT_DIR` | Where generated scripts, captions, transcripts, manifests, and videos are saved. | `output/today`, `output/horror-batch-1` |
+| `GAMEPLAY_SEED` | Changes which gameplay clip and start point are selected. Same seed means stable reruns. | `42`, `100`, `999` |
+| `CAPTION_SYNC` | Caption timing mode. | `word`, `duration`, `none` |
+| `PRIVACY_STATUS` | YouTube privacy setting when publishing. | `private`, `unlisted`, `public` |
+
+### 3. Generate scripts first
+
+```bash
+python -m brainrot pipeline \
+  --count "$COUNT" \
+  --backend claude \
+  --content-mode "$CONTENT_MODE" \
+  --fiction-genre "$FICTION_GENRE" \
+  --channel "$CHANNEL" \
+  --out-dir "$OUT_DIR"
+```
+
+Review the generated `.md` files in `output/today/`, then record the voiceover for each script.
+
+### 4. Add voiceovers, gameplay, and logo
+
+Save each recorded voiceover with the same slug as its script JSON:
+
+```text
+output/today/my-story-title.json
+assets/voiceovers/my-story-title.wav
+```
+
+Put long gameplay source clips here:
+
+```text
+assets/gameplay/clips/
+```
+
+Put the channel logo here:
+
+```text
+assets/logos/example-channel/logo.png
+```
+
+Change `example-channel` to match your `CHANNEL` value.
+
+### 5. Render finished Shorts
+
+This matches voiceovers by filename, picks a gameplay clip, chooses a random-looking section inside long gameplay files, syncs captions to spoken words with Whisper, and renders the videos:
+
+```bash
+python -m brainrot pipeline \
+  --count "$COUNT" \
+  --backend claude \
+  --content-mode "$CONTENT_MODE" \
+  --fiction-genre "$FICTION_GENRE" \
+  --voiceover-dir assets/voiceovers \
+  --gameplay-dir assets/gameplay/clips \
+  --caption-sync "$CAPTION_SYNC" \
+  --gameplay-seed "$GAMEPLAY_SEED" \
+  --channel "$CHANNEL" \
+  --out-dir "$OUT_DIR"
+```
+
+Change `GAMEPLAY_SEED` when you want different gameplay clips or different start points.
+
+### 6. Review outputs
+
+Check these files:
+
+```text
+output/today/pipeline-manifest.json
+output/today/*.mp4
+output/today/*.srt
+output/today/*.transcript.json
+```
+
+If captions feel too loose but you do not want to use OpenAI transcription, change `--caption-sync word` to `--caption-sync duration`.
+
+### 7. Publish after review
+
+Only add `--publish` once the rendered Shorts look good:
+
+```bash
+python -m brainrot pipeline \
+  --count "$COUNT" \
+  --backend claude \
+  --content-mode "$CONTENT_MODE" \
+  --fiction-genre "$FICTION_GENRE" \
+  --voiceover-dir assets/voiceovers \
+  --gameplay-dir assets/gameplay/clips \
+  --caption-sync "$CAPTION_SYNC" \
+  --gameplay-seed "$GAMEPLAY_SEED" \
+  --channel "$CHANNEL" \
+  --publish \
+  --privacy-status "$PRIVACY_STATUS" \
+  --out-dir "$OUT_DIR"
+```
+
+Change `PRIVACY_STATUS` to `unlisted` or `public` only when you are ready.
+
 ## Recommended Daily Workflow
 
 1. Choose `--content-mode nonfiction` or `--content-mode fiction`.
