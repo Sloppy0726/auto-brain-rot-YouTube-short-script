@@ -11,6 +11,7 @@ It can:
 - Write 45-60 second narration scripts.
 - Estimate punchy caption timing and export `.srt`.
 - Match your recorded voiceover files to generated scripts.
+- Pick gameplay clips from a local gameplay library folder.
 - Render a 1080x1920 split-screen Short with captions on top and your gameplay on the bottom using `ffmpeg`.
 - Use either the offline template backend or Claude through Anthropic's Messages API.
 
@@ -66,6 +67,28 @@ python -m brainrot pipeline \
   --out-dir output/today
 ```
 
+Run a fiction channel by genre:
+
+```bash
+python -m brainrot pipeline \
+  --count 3 \
+  --content-mode fiction \
+  --fiction-genre micro-horror \
+  --backend claude \
+  --out-dir output/micro-horror
+```
+
+Run multiple fiction genres in one batch:
+
+```bash
+python -m brainrot pipeline \
+  --count 4 \
+  --content-mode fiction \
+  --fiction-genre micro-horror,sci-fi-ai \
+  --backend claude \
+  --out-dir output/fiction-batch
+```
+
 Render with your recorded voiceover and gameplay footage:
 
 ```bash
@@ -73,9 +96,17 @@ python -m brainrot pipeline \
   --count 3 \
   --backend claude \
   --voiceover-dir assets/voiceovers \
-  --gameplay assets/gameplay/example.mp4 \
+  --gameplay-dir assets/gameplay/clips \
   --out-dir output/today
 ```
+
+Put your gameplay/satisfying footage here:
+
+```text
+assets/gameplay/clips/
+```
+
+The pipeline picks one clip per script. The choice is deterministic by script slug so reruns are stable. Use `--gameplay-seed 42` to rotate selections.
 
 Upload a rendered Short to YouTube:
 
@@ -93,7 +124,7 @@ python -m brainrot pipeline \
   --count 3 \
   --backend claude \
   --voiceover-dir assets/voiceovers \
-  --gameplay assets/gameplay/example.mp4 \
+  --gameplay-dir assets/gameplay/clips \
   --publish \
   --privacy-status private \
   --out-dir output/today
@@ -146,14 +177,16 @@ python -m brainrot render \
 
 ## Recommended Daily Workflow
 
-1. Idea Agent scans Reddit for fast-moving leads.
-2. You pick or keep the strongest 3 hooks.
-3. Script Agent asks Claude for original 45-60 second scripts.
-4. You fact-check claims and add source links in the JSON.
-5. Record the voiceover from the Markdown script.
-6. Save the recording with the same slug as the script JSON.
-7. Video Agent matches the recorded audio, captions, and gameplay into a split-screen render.
-8. Review the final video before uploading.
+1. Choose `--content-mode nonfiction` or `--content-mode fiction`.
+2. For nonfiction, Idea Agent scans Reddit for fast-moving leads.
+3. For fiction, Idea Agent generates original story seeds for the selected `--fiction-genre`.
+4. Script Agent asks Claude for original 45-60 second scripts.
+5. You fact-check nonfiction claims or review fiction for originality.
+6. Record the voiceover from the Markdown script.
+7. Save the recording with the same slug as the script JSON.
+8. Drop reusable gameplay clips into `assets/gameplay/clips/`.
+9. Video Agent matches the recorded audio, captions, and a gameplay clip into a split-screen render.
+10. Review the final video before uploading.
 
 Example:
 
@@ -168,9 +201,34 @@ Idea Agent:
 
 - Reads hot, top, rising, or new posts from configured subreddits.
 - Can use niche presets with dozens of default communities.
+- Can skip Reddit and generate fiction seeds with `--content-mode fiction`.
 - Scores posts by upvotes and comment activity.
 - Converts them into briefs without copying the post text.
 - Falls back to the built-in topic bank if Reddit is unavailable.
+
+Fiction genres:
+
+- `micro-horror`
+- `sci-fi-ai`
+- `moral-dilemma`
+- `workplace-drama`
+- `relationship-drama`
+
+Two-person example:
+
+```bash
+# Person 1, channel A
+python -m brainrot pipeline --content-mode fiction --fiction-genre micro-horror --out-dir output/person-1-horror
+
+# Person 1, channel B
+python -m brainrot pipeline --content-mode fiction --fiction-genre sci-fi-ai --out-dir output/person-1-sci-fi
+
+# Person 2, channel A
+python -m brainrot pipeline --content-mode fiction --fiction-genre moral-dilemma --out-dir output/person-2-dilemmas
+
+# Person 2, channel B
+python -m brainrot pipeline --content-mode fiction --fiction-genre workplace-drama --out-dir output/person-2-workplace
+```
 
 Script Agent:
 
@@ -182,8 +240,10 @@ Video Agent:
 
 - Uses your recorded audio when `--voiceover` or `--voiceover-dir` is passed.
 - Matches `--voiceover-dir` files by script slug, with `.wav`, `.mp3`, `.m4a`, `.aac`, `.aiff`, `.aif`, `.flac`, or `.ogg`.
+- Uses `--gameplay-dir` to pick from `.mp4`, `.mov`, `.m4v`, `.webm`, or `.mkv` clips.
+- Uses `--gameplay` when you want to force one exact clip.
 - Can still use macOS `say` when `--make-voice` is passed as a scratch fallback.
-- Uses `ffmpeg` to render final split-screen videos when `--gameplay` is passed.
+- Uses `ffmpeg` to render final split-screen videos when `--gameplay` or `--gameplay-dir` is passed.
 - Skips rendering and leaves warnings if required tools or assets are missing.
 
 Publisher Agent:
@@ -231,7 +291,8 @@ brainrot/
   captions.py    Caption timing and SRT export.
   render.py      ffmpeg renderer.
 assets/
-  gameplay/      Put your own gameplay clips here.
+  gameplay/
+    clips/       Put reusable gameplay clips here.
   voiceovers/    Put your recorded narration files here.
 output/          Generated scripts, captions, audio, and videos.
 ```

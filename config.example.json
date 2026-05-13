@@ -1,5 +1,8 @@
 {
   "count": 3,
+  "content_mode": "fiction",
+  "fiction_genre": "micro-horror,sci-fi-ai",
+  "fiction_seed": null,
   "backend": "claude",
   "model": "claude-sonnet-4-5",
   "niches": ["scams", "business", "ai", "internet", "law", "money"],
@@ -11,7 +14,8 @@
   "voiceover_dir": "assets/voiceovers",
   "make_voice": false,
   "voice": null,
-  "gameplay": "assets/gameplay/example.mp4",
+  "gameplay_dir": "assets/gameplay/clips",
+  "gameplay_seed": null,
   "publish": false,
   "privacy_status": "private",
   "client_secrets": "client_secrets.json",

@@ -17,15 +17,37 @@ def make_script(brief: Brief) -> ShortScript:
         niche=brief.niche,
         hook=brief.hook,
         narration=narration,
-        hashtags=NICHE_HASHTAGS.get(brief.niche, ["#shorts"]),
+        hashtags=hashtags_for_brief(brief),
         fact_check_notes=fact_check_notes(brief),
-        source_ideas=brief.source_ideas or source_ideas(brief.niche),
+        source_ideas=source_ideas_for_brief(brief),
         estimated_seconds=duration,
         captions=captions,
     )
 
 
+def hashtags_for_brief(brief: Brief) -> List[str]:
+    if brief.content_mode == "fiction":
+        genre_tags = {
+            "micro-horror": ["#horrorstory", "#scarystory", "#shorts"],
+            "sci-fi-ai": ["#scifi", "#aitok", "#shorts"],
+            "moral-dilemma": ["#storytime", "#mystory", "#shorts"],
+            "workplace-drama": ["#workstory", "#corporatestories", "#shorts"],
+            "relationship-drama": ["#storytime", "#drama", "#shorts"],
+        }
+        return genre_tags.get(brief.fiction_genre, ["#storytime", "#shorts"])
+    return NICHE_HASHTAGS.get(brief.niche, ["#shorts"])
+
+
+def source_ideas_for_brief(brief: Brief) -> List[str]:
+    if brief.content_mode == "fiction":
+        return []
+    return brief.source_ideas or source_ideas(brief.niche)
+
+
 def generate_narration(brief: Brief) -> str:
+    if brief.content_mode == "fiction":
+        return generate_fiction_narration(brief)
+
     templates = [
         "{hook} Here is the part most people miss. {setup} {mechanic} {twist} {takeaway}",
         "{hook} It sounds simple, but the trick is the timing. {setup} {mechanic} {twist} {takeaway}",
@@ -92,7 +114,32 @@ def story_parts(brief: Brief) -> dict:
     }
 
 
+def generate_fiction_narration(brief: Brief) -> str:
+    endings = {
+        "micro-horror": "The last message said, stop looking behind you. I had not turned around yet.",
+        "sci-fi-ai": "The system marked the task complete before anyone admitted what it had done.",
+        "moral-dilemma": "I still do not know if telling the truth made me good, or just less guilty.",
+        "workplace-drama": "By morning, the spreadsheet was gone, but everyone on it had resigned.",
+        "relationship-drama": "The worst part was not the secret. It was that everyone else already knew.",
+    }
+    ending = endings.get(brief.fiction_genre, "That was when I realized the story had not ended.")
+    return (
+        f"{brief.hook} At first, I thought it was just one of those strange moments people forget by lunch. "
+        "Then the second detail matched. Then the third. "
+        "Every normal explanation got smaller, and the silence around me got louder. "
+        "I tried to tell myself there was a reasonable answer, but reasonable answers do not wait for you in the dark. "
+        f"{ending}"
+    )
+
+
 def fact_check_notes(brief: Brief) -> List[str]:
+    if brief.content_mode == "fiction":
+        return [
+            "Fiction. Do not present this as a true event.",
+            "Check for accidental similarity to existing stories before publishing.",
+            "Keep titles/descriptions clear that the channel publishes original fiction.",
+        ]
+
     return [
         "Replace any broad claim with a checked detail before publishing.",
         "Add at least one source URL to the JSON after research.",

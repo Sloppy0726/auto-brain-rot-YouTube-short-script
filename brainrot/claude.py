@@ -94,6 +94,9 @@ def call_claude(user_prompt: str, model: str) -> str:
 
 
 def prompt_for_brief(brief: Brief) -> str:
+    if brief.content_mode == "fiction":
+        return fiction_prompt_for_brief(brief)
+
     source_ideas = ", ".join(brief.source_ideas)
     return f"""
 Create one original brain-rot style YouTube Short script.
@@ -120,6 +123,38 @@ Rules:
   "hashtags": ["#shorts"],
   "fact_check_notes": ["string"],
   "source_ideas": ["string"]
+}}
+""".strip()
+
+
+def fiction_prompt_for_brief(brief: Brief) -> str:
+    return f"""
+Create one original fictional YouTube Short story script.
+
+Content mode: fiction
+Fiction genre: {brief.fiction_genre}
+Story seed: {brief.title}
+Starting hook idea: {brief.hook}
+Angle: {brief.angle}
+
+Rules:
+- 45 to 58 seconds when read quickly.
+- First sentence must be a strong story hook.
+- Use first person or close third person.
+- Use simple language and short sentences.
+- Build tension quickly: hook, setup, escalation, twist, final line.
+- Do not present the story as a true event.
+- Do not copy Reddit posts, creepypasta, articles, movies, games, or viral videos.
+- No graphic gore, sexual content, hate, or real-person accusations.
+- End with a memorable twist or unresolved final line.
+- Return JSON only, with this shape:
+{{
+  "title": "string",
+  "hook": "string",
+  "narration": "string",
+  "hashtags": ["#shorts"],
+  "fact_check_notes": ["Fiction. Check for accidental similarity to existing stories."],
+  "source_ideas": []
 }}
 """.strip()
 

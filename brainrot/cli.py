@@ -8,6 +8,7 @@ from typing import Optional
 from .agents import DEFAULT_NICHES, run_pipeline, resolve_subreddits
 from .claude import ClaudeError, DEFAULT_MODEL, make_claude_script
 from .files import load_script, slugify, write_script_bundle
+from .fiction import list_fiction_genres
 from .models import Brief
 from .render import RenderError, render_short
 from .scriptgen import make_script
@@ -63,6 +64,9 @@ def main() -> None:
     pipeline_parser.add_argument("--out-dir", default="output/today")
     pipeline_parser.add_argument("--backend", choices=["template", "claude"], default="claude")
     pipeline_parser.add_argument("--model", default=DEFAULT_MODEL)
+    pipeline_parser.add_argument("--content-mode", choices=["nonfiction", "fiction"], default="nonfiction")
+    pipeline_parser.add_argument("--fiction-genre", default="micro-horror")
+    pipeline_parser.add_argument("--fiction-seed", type=int)
     pipeline_parser.add_argument("--niches", default="all")
     pipeline_parser.add_argument("--subreddits")
     pipeline_parser.add_argument("--extra-subreddits", default="")
@@ -75,6 +79,8 @@ def main() -> None:
     pipeline_parser.add_argument("--voiceover")
     pipeline_parser.add_argument("--voiceover-dir")
     pipeline_parser.add_argument("--gameplay")
+    pipeline_parser.add_argument("--gameplay-dir")
+    pipeline_parser.add_argument("--gameplay-seed", type=int)
     pipeline_parser.add_argument("--publish", action="store_true")
     pipeline_parser.add_argument("--privacy-status", choices=["private", "unlisted", "public"], default="private")
     pipeline_parser.add_argument("--category-id", default="22")
@@ -148,6 +154,9 @@ def main() -> None:
             out_dir=Path(args.out_dir),
             backend=args.backend,
             model=args.model,
+            content_mode=args.content_mode,
+            fiction_genre=args.fiction_genre,
+            fiction_seed=args.fiction_seed,
             niches=args.niches,
             subreddits=args.subreddits,
             extra_subreddits=args.extra_subreddits,
@@ -160,6 +169,8 @@ def main() -> None:
             voiceover=Path(args.voiceover) if args.voiceover else None,
             voiceover_dir=Path(args.voiceover_dir) if args.voiceover_dir else None,
             gameplay=Path(args.gameplay) if args.gameplay else None,
+            gameplay_dir=Path(args.gameplay_dir) if args.gameplay_dir else None,
+            gameplay_seed=args.gameplay_seed,
             publish=args.publish,
             privacy_status=args.privacy_status,
             category_id=args.category_id,
@@ -267,6 +278,9 @@ def create_pipeline(
     out_dir: Path,
     backend: str,
     model: str,
+    content_mode: str,
+    fiction_genre: str,
+    fiction_seed: Optional[int],
     niches: str,
     subreddits: Optional[str],
     extra_subreddits: str,
@@ -279,19 +293,28 @@ def create_pipeline(
     voiceover: Optional[Path],
     voiceover_dir: Optional[Path],
     gameplay: Optional[Path],
+    gameplay_dir: Optional[Path],
+    gameplay_seed: Optional[int],
     publish: bool,
     privacy_status: str,
     category_id: str,
     client_secrets: Path,
     token_path: Path,
 ) -> None:
-    niche_list = parse_csv(niches) or DEFAULT_NICHES
-    subreddit_list = resolve_subreddits(
-        niches=niche_list,
-        subreddits=parse_csv(subreddits),
-        extra_subreddits=parse_csv(extra_subreddits),
-        max_subreddits=max_subreddits,
-    )
+    if content_mode == "fiction":
+        subreddit_list = []
+        fiction_genres = parse_csv(fiction_genre) or ["micro-horror"]
+        validate_fiction_genres(fiction_genres)
+    else:
+        niche_list = parse_csv(niches) or DEFAULT_NICHES
+        subreddit_list = resolve_subreddits(
+            niches=niche_list,
+            subreddits=parse_csv(subreddits),
+            extra_subreddits=parse_csv(extra_subreddits),
+            max_subreddits=max_subreddits,
+        )
+        fiction_genres = []
+
     try:
         items = run_pipeline(
             count=count,
@@ -299,6 +322,9 @@ def create_pipeline(
             backend=backend,
             model=model,
             subreddits=subreddit_list,
+            content_mode=content_mode,
+            fiction_genres=fiction_genres,
+            fiction_seed=fiction_seed,
             per_subreddit=per_subreddit,
             reddit_sort=reddit_sort,
             reddit_time=reddit_time,
@@ -307,6 +333,8 @@ def create_pipeline(
             voiceover=voiceover,
             voiceover_dir=voiceover_dir,
             gameplay=gameplay,
+            gameplay_dir=gameplay_dir,
+            gameplay_seed=gameplay_seed,
             publish=publish,
             privacy_status=privacy_status,
             category_id=category_id,
@@ -317,7 +345,10 @@ def create_pipeline(
         raise SystemExit(str(exc))
 
     print(f"Pipeline created {len(items)} Short bundle(s) in {out_dir}")
-    print(f"Searched {len(subreddit_list)} subreddit(s): {', '.join(subreddit_list[:12])}{'...' if len(subreddit_list) > 12 else ''}")
+    if content_mode == "fiction":
+        print(f"Fiction genre(s): {', '.join(fiction_genres)}")
+    else:
+        print(f"Searched {len(subreddit_list)} subreddit(s): {', '.join(subreddit_list[:12])}{'...' if len(subreddit_list) > 12 else ''}")
     print(f"Manifest: {out_dir / 'pipeline-manifest.json'}")
     for item in items:
         print(f"- {item.title}")
@@ -415,6 +446,13 @@ def video_ids_from_manifest(manifest: Path) -> list:
         for item in data
         if isinstance(item, dict) and item.get("youtube_video_id")
     ]
+
+
+def validate_fiction_genres(genres: list) -> None:
+    valid = set(list_fiction_genres())
+    invalid = [genre for genre in genres if genre not in valid and genre != "all"]
+    if invalid:
+        raise SystemExit(f"Unknown fiction genre(s): {', '.join(invalid)}. Valid genres: {', '.join(sorted(valid))}")
 
 
 def default_hook(topic: str) -> str:

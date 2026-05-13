@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -10,6 +11,7 @@ from typing import Dict, List, Optional
 
 from .claude import DEFAULT_MODEL, make_claude_script
 from .files import load_script, write_script_bundle
+from .fiction import make_fiction_briefs
 from .models import Brief, ShortScript
 from .render import RenderError, render_short
 from .scriptgen import make_script
@@ -19,6 +21,7 @@ from .youtube import YouTubeAgent, YouTubeError, make_upload_description
 
 
 AUDIO_EXTENSIONS = [".wav", ".mp3", ".m4a", ".aac", ".aiff", ".aif", ".flac", ".ogg"]
+VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v", ".webm", ".mkv"]
 
 
 SUBREDDITS_BY_NICHE = {
@@ -118,6 +121,7 @@ class PipelineItem:
     script_markdown: Path
     captions_srt: Path
     audio: Optional[Path] = None
+    gameplay: Optional[Path] = None
     video: Optional[Path] = None
     youtube_video_id: Optional[str] = None
     youtube_url: Optional[str] = None
@@ -130,6 +134,7 @@ class PipelineItem:
             "script_markdown": str(self.script_markdown),
             "captions_srt": str(self.captions_srt),
             "audio": str(self.audio) if self.audio else None,
+            "gameplay": str(self.gameplay) if self.gameplay else None,
             "video": str(self.video) if self.video else None,
             "youtube_video_id": self.youtube_video_id,
             "youtube_url": self.youtube_url,
@@ -144,13 +149,22 @@ class IdeaAgent:
         per_subreddit: int = 8,
         reddit_sort: str = "hot",
         reddit_time: str = "day",
+        content_mode: str = "nonfiction",
+        fiction_genres: Optional[List[str]] = None,
+        fiction_seed: Optional[int] = None,
     ) -> None:
         self.subreddits = subreddits or DEFAULT_SUBREDDITS
         self.per_subreddit = per_subreddit
         self.reddit_sort = reddit_sort
         self.reddit_time = reddit_time
+        self.content_mode = content_mode
+        self.fiction_genres = fiction_genres
+        self.fiction_seed = fiction_seed
 
     def find_ideas(self, count: int) -> List[Brief]:
+        if self.content_mode == "fiction":
+            return make_fiction_briefs(count=count, genres=self.fiction_genres, seed=self.fiction_seed)
+
         candidates: List[Dict[str, object]] = []
         for subreddit in self.subreddits:
             candidates.extend(self._fetch_subreddit(subreddit))
@@ -177,6 +191,7 @@ class IdeaAgent:
                     why_it_might_work="Reddit velocity suggests the topic already has curiosity and discussion.",
                     risk_level="medium: do not copy the post; verify before upload",
                     source_ideas=[url, *source_ideas(niche)],
+                    content_mode="nonfiction",
                 )
             )
         return briefs
@@ -268,21 +283,31 @@ class VideoAgent:
         voiceover: Optional[Path] = None,
         voiceover_dir: Optional[Path] = None,
         gameplay: Optional[Path] = None,
+        gameplay_dir: Optional[Path] = None,
+        gameplay_seed: Optional[int] = None,
     ) -> None:
         self.make_voice = make_voice
         self.voice = voice
         self.voiceover = voiceover
         self.voiceover_dir = voiceover_dir
         self.gameplay = gameplay
+        self.gameplay_dir = gameplay_dir
+        self.gameplay_seed = gameplay_seed
 
     def produce(self, script_json: Path, out_dir: Path) -> Dict[str, object]:
         script = load_script(script_json)
-        result: Dict[str, object] = {"audio": None, "video": None, "warnings": []}
+        result: Dict[str, object] = {"audio": None, "gameplay": None, "video": None, "warnings": []}
         audio_path, voiceover_warning = self.resolve_recorded_voiceover(script_json)
         if voiceover_warning:
             result["warnings"].append(voiceover_warning)
         if audio_path:
             result["audio"] = audio_path
+
+        gameplay_path, gameplay_warning = self.resolve_gameplay_clip(script_json)
+        if gameplay_warning:
+            result["warnings"].append(gameplay_warning)
+        if gameplay_path:
+            result["gameplay"] = gameplay_path
 
         if not audio_path and self.make_voice:
             try:
@@ -291,15 +316,19 @@ class VideoAgent:
             except VoiceError as exc:
                 result["warnings"].append(str(exc))
 
-        if self.gameplay and self.expects_recorded_voiceover() and not audio_path:
+        if self.expects_gameplay() and self.expects_recorded_voiceover() and not audio_path:
             result["warnings"].append("Skipped render because no recorded voiceover audio was found.")
             return result
 
-        if self.gameplay:
+        if self.expects_gameplay() and not gameplay_path:
+            result["warnings"].append("Skipped render because no gameplay clip was found.")
+            return result
+
+        if gameplay_path:
             try:
                 video_path = render_short(
                     script,
-                    gameplay_path=self.gameplay,
+                    gameplay_path=gameplay_path,
                     audio_path=audio_path,
                     output_path=out_dir / f"{script_json.stem}.mp4",
                 )
@@ -311,6 +340,9 @@ class VideoAgent:
 
     def expects_recorded_voiceover(self) -> bool:
         return bool(self.voiceover or self.voiceover_dir)
+
+    def expects_gameplay(self) -> bool:
+        return bool(self.gameplay or self.gameplay_dir)
 
     def resolve_recorded_voiceover(self, script_json: Path) -> tuple:
         if self.voiceover:
@@ -332,6 +364,32 @@ class VideoAgent:
         extensions = ", ".join(AUDIO_EXTENSIONS)
         return None, f"No recorded voiceover found for {script_json.stem}. Expected one of: {extensions}"
 
+    def resolve_gameplay_clip(self, script_json: Path) -> tuple:
+        if self.gameplay:
+            if self.gameplay.exists():
+                return self.gameplay, None
+            return None, f"Gameplay file does not exist: {self.gameplay}"
+
+        if not self.gameplay_dir:
+            return None, None
+
+        if not self.gameplay_dir.exists():
+            return None, f"Gameplay clip directory does not exist: {self.gameplay_dir}"
+
+        clips = [
+            path
+            for path in self.gameplay_dir.rglob("*")
+            if path.is_file() and path.suffix.lower() in VIDEO_EXTENSIONS
+        ]
+        clips.sort()
+        if not clips:
+            extensions = ", ".join(VIDEO_EXTENSIONS)
+            return None, f"No gameplay clips found in {self.gameplay_dir}. Expected one of: {extensions}"
+
+        seed = f"{self.gameplay_seed}:{script_json.stem}" if self.gameplay_seed is not None else script_json.stem
+        rng = random.Random(seed)
+        return clips[rng.randrange(len(clips))], None
+
 
 def run_pipeline(
     count: int,
@@ -339,6 +397,9 @@ def run_pipeline(
     backend: str = "template",
     model: str = DEFAULT_MODEL,
     subreddits: Optional[List[str]] = None,
+    content_mode: str = "nonfiction",
+    fiction_genres: Optional[List[str]] = None,
+    fiction_seed: Optional[int] = None,
     per_subreddit: int = 8,
     reddit_sort: str = "hot",
     reddit_time: str = "day",
@@ -347,6 +408,8 @@ def run_pipeline(
     voiceover: Optional[Path] = None,
     voiceover_dir: Optional[Path] = None,
     gameplay: Optional[Path] = None,
+    gameplay_dir: Optional[Path] = None,
+    gameplay_seed: Optional[int] = None,
     publish: bool = False,
     privacy_status: str = "private",
     category_id: str = "22",
@@ -359,6 +422,9 @@ def run_pipeline(
         per_subreddit=per_subreddit,
         reddit_sort=reddit_sort,
         reddit_time=reddit_time,
+        content_mode=content_mode,
+        fiction_genres=fiction_genres,
+        fiction_seed=fiction_seed,
     )
     script_agent = ScriptAgent(backend=backend, model=model)
     video_agent = VideoAgent(
@@ -367,6 +433,8 @@ def run_pipeline(
         voiceover=voiceover,
         voiceover_dir=voiceover_dir,
         gameplay=gameplay,
+        gameplay_dir=gameplay_dir,
+        gameplay_seed=gameplay_seed,
     )
     publisher_agent = (
         PublisherAgent(
@@ -394,6 +462,7 @@ def run_pipeline(
                 script_markdown=paths["markdown"],
                 captions_srt=paths["srt"],
                 audio=produced["audio"],
+                gameplay=produced["gameplay"],
                 video=produced["video"],
                 youtube_video_id=upload["youtube_video_id"],
                 youtube_url=upload["youtube_url"],

@@ -13,6 +13,8 @@ class Brief:
     why_it_might_work: str
     risk_level: str
     source_ideas: List[str] = field(default_factory=list)
+    content_mode: str = "nonfiction"
+    fiction_genre: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
